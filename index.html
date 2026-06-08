@@ -201,7 +201,8 @@
     .btn-success:hover { opacity: .9; }
     .btn-ghost   { background: var(--bg); color: var(--text); }
     .btn-ghost:hover { background: var(--border); }
-    .btn-danger  { background: var(--danger-light); color: var(--danger); }
+    .btn-danger     { background: var(--danger-light); color: var(--danger); }
+    .btn-secondary  { background: var(--primary-light); color: var(--primary); }
     .btn-wa      { background: #25D366; color: white; }
     .btn-wa:hover { opacity: .9; }
     .btn-full    { width: 100%; }
@@ -480,8 +481,8 @@
       -webkit-tap-highlight-color: transparent;
     }
     .sel-item.selected { border-color: var(--primary); background: var(--primary-light); }
-    .sel-item.has-other-point { border-color: var(--warning); }
-    .sel-item.has-other-point .point-warn { color: var(--warning); font-size: 11px; }
+    .sel-item.has-other-point { border-color: var(--primary-light); }
+    .sel-item.has-other-point .point-warn { color: var(--muted); font-size: 11px; }
     /* Externos: pill removível */
     .externo-tag {
       display: inline-flex;
@@ -551,6 +552,18 @@
     .empty p    { font-size: 14px; line-height: 1.6; }
 
     /* ===== DANGER ZONE ===== */
+    .export-zone {
+      border: 2px solid var(--primary-light);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .export-zone h3 { color: var(--primary); font-size: 13px; font-weight: 700; text-transform: uppercase; }
+    .export-zone p  { color: var(--muted); font-size: 12px; }
+
     .danger-zone {
       border: 2px solid var(--danger);
       border-radius: var(--radius-lg);
@@ -768,6 +781,15 @@
         <input type="text" id="cfg-dono">
       </div>
       <button class="btn btn-primary btn-full" onclick="salvarConfiguracoes()">Salvar Configurações</button>
+
+      <div class="export-zone">
+        <h3>📦 Backup de Dados</h3>
+        <p>Exporte seus dados para transferir para outro dispositivo ou fazer backup.</p>
+        <button class="btn btn-secondary btn-full" onclick="exportarDados()">⬇️ Exportar dados (JSON)</button>
+        <button class="btn btn-secondary btn-full" onclick="document.getElementById('import-file').click()">⬆️ Importar dados (JSON)</button>
+        <input type="file" id="import-file" accept=".json,application/json" style="display:none" onchange="importarDados(this)">
+      </div>
+
       <div class="danger-zone">
         <h3>⚠️ Zona de Risco</h3>
         <button class="btn btn-danger btn-full" onclick="resetarApp()">Apagar todos os dados</button>
@@ -1469,7 +1491,7 @@ function renderSelList() {
         <div style="flex:1">
           <div style="font-weight:600;font-size:14px">${p.nome}</div>
           ${temOutros
-            ? `<div class="point-warn">Já tem ponto em: ${mesesSel.join(', ')}</div>`
+            ? `<div class="point-warn">Ponto em ${mesesSel.join(', ')} — pode selecionar novamente ✓</div>`
             : ''}
         </div>
         ${isSel ? '<span class="check-mark">✓</span>' : ''}
@@ -1908,6 +1930,46 @@ function salvarConfiguracoes() {
   salvar();
   showToast('Configurações salvas!');
   setTimeout(() => showScreen('dashboard'), 700);
+}
+
+function exportarDados() {
+  const dados = localStorage.getItem(STORAGE_KEY);
+  if (!dados) { showToast('Nenhum dado para exportar'); return; }
+  const blob = new Blob([dados], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const nome = (db.caixa && db.caixa.nome ? db.caixa.nome.replace(/\s+/g, '_') : 'caixa');
+  a.href     = url;
+  a.download = `${nome}_backup.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Arquivo exportado!');
+}
+
+function importarDados(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const dados = JSON.parse(e.target.result);
+      if (!dados.caixa || !dados.participantes) {
+        showToast('Arquivo inválido — não parece um backup do Caixa');
+        return;
+      }
+      if (!confirm(`Importar dados de "${dados.caixa.nome}"?\n\nIsso vai SUBSTITUIR todos os dados atuais.`)) {
+        input.value = '';
+        return;
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
+      showToast('Dados importados com sucesso!');
+      setTimeout(() => location.reload(), 800);
+    } catch {
+      showToast('Erro ao ler arquivo — verifique se é um JSON válido');
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
 }
 
 function resetarApp() {

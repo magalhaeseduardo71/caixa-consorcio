@@ -1,4 +1,4 @@
-const CACHE = 'caixa-v1';
+const CACHE = 'caixa-v3';
 const BASE  = self.registration.scope;
 const ASSETS = [
   BASE,
