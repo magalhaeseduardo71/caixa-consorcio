@@ -480,7 +480,43 @@
       -webkit-tap-highlight-color: transparent;
     }
     .sel-item.selected { border-color: var(--primary); background: var(--primary-light); }
-    .sel-item.occupied { opacity: .45; cursor: not-allowed; }
+    .sel-item.has-other-point { border-color: var(--warning); }
+    .sel-item.has-other-point .point-warn { color: var(--warning); font-size: 11px; }
+    /* Externos: pill removível */
+    .externo-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #FFF0F6;
+      color: #D6006C;
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      margin: 4px 4px 4px 0;
+    }
+    .externo-tag button {
+      background: none;
+      border: none;
+      font-size: 14px;
+      cursor: pointer;
+      color: #D6006C;
+      padding: 0;
+      line-height: 1;
+    }
+    .externos-add {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .externos-add input {
+      flex: 1;
+      padding: 9px 13px;
+      font-size: 14px;
+    }
+    .externos-add button {
+      flex-shrink: 0;
+    }
     .sel-item .check-mark { color: var(--primary); font-size: 20px; margin-left: auto; }
 
     /* ===== TOAST ===== */
@@ -797,13 +833,14 @@ Esta é uma mensagem automática.`;
 let db = {
   caixa: null,
   participantes: [],
-  pontos: MESES.map((n, i) => ({ mes: i+1, nome_mes: n, contemplados: [], tipo: 'individual' })),
+  pontos: MESES.map((n, i) => ({ mes: i+1, nome_mes: n, contemplados: [], externos: [], tipo: 'individual' })),
   pagamentos: []
 };
 
 let mesPagamentos = new Date().getMonth() + 1; // mês atual
 let editPontoMes  = null;
-let selPontoIds   = [];        // IDs selecionados no modal de ponto
+let selPontoIds   = [];        // IDs de participantes registrados selecionados no modal
+let selExternos   = [];        // Nomes de pessoas externas no ponto dividido
 let bulkFila      = [];
 let bulkIdx       = 0;
 
@@ -820,9 +857,11 @@ function carregar() {
     if (!Array.isArray(db.pontos) || db.pontos.length !== 12) {
       db.pontos = MESES.map((n, i) => {
         const ex = (db.pontos || []).find(p => p.mes === i+1);
-        return ex || { mes: i+1, nome_mes: n, contemplados: [], tipo: 'individual' };
+        return ex || { mes: i+1, nome_mes: n, contemplados: [], externos: [], tipo: 'individual' };
       });
     }
+    // Migração: garantir campo externos em pontos antigos
+    db.pontos.forEach(p => { if (!Array.isArray(p.externos)) p.externos = []; });
     if (!Array.isArray(db.participantes)) db.participantes = [];
     if (!Array.isArray(db.pagamentos))    db.pagamentos    = [];
   } catch(e) { console.error('Erro ao carregar dados', e); }
@@ -839,41 +878,62 @@ function uid() {
 /* ──────────────────────────────────────────────
    LÓGICA DE NEGÓCIO — CÁLCULO DE CONTEMPLAÇÃO
 
-   Fórmula correta (do CLAUDE.md):
-     total_pagantes       = total_participantes - qtd_contemplados
-     valor_arrecadado     = total_pagantes × valor_parcela
-     valor_por_contemplado= valor_arrecadado ÷ qtd_contemplados
+   Regra crítica sobre EXTERNOS (não participantes):
+   - Externos NÃO pagam mensalidade → NÃO reduzem totalPagantes
+   - Mas RECEBEM uma fatia do valor arrecadado
+
+   Exemplo: 7 participantes, parcela R$300, Eduardo + Lucas (externo):
+     totalPagantes  = 7 - 1 (só Eduardo é isento)  = 6
+     valorArrecadado = 6 × 300 = R$1.800
+     totalRecipients = 1 (Eduardo) + 1 (Lucas externo) = 2
+     valorPorContemplado = 1.800 ÷ 2 = R$900 cada
+
+   Fórmula:
+     totalPagantes       = totalParticipantes - len(contemplados_registrados)
+     valorArrecadado     = totalPagantes × parcela
+     totalRecipients     = len(contemplados_registrados) + len(externos)
+     valorPorContemplado = valorArrecadado ÷ totalRecipients
 ────────────────────────────────────────────── */
 function calcularContemplacao(mes) {
-  const ponto          = db.pontos.find(p => p.mes === mes);
-  const ativos         = db.participantes.filter(p => p.ativo !== false);
-  const totalPart      = ativos.length;
-  const parcela        = db.caixa ? db.caixa.valor_parcela : 0;
-  const contemsIds     = (ponto && ponto.contemplados) ? ponto.contemplados : [];
-  const qtdContems     = contemsIds.length;
+  const ponto      = db.pontos.find(p => p.mes === mes);
+  const ativos     = db.participantes.filter(p => p.ativo !== false);
+  const totalPart  = ativos.length;
+  const parcela    = db.caixa ? db.caixa.valor_parcela : 0;
 
-  if (qtdContems === 0) {
+  const contemsIds = (ponto && ponto.contemplados) ? ponto.contemplados : [];
+  const externos   = (ponto && ponto.externos)     ? ponto.externos     : [];
+
+  // Só os contemplados REGISTRADOS reduzem a contagem de pagantes
+  const qtdRegis        = contemsIds.length;
+  const totalRecipients = qtdRegis + externos.length;
+
+  if (totalRecipients === 0) {
     return {
       totalPagantes: totalPart,
       valorArrecadado: totalPart * parcela,
       valorPorContemplado: 0,
       qtdContemplados: 0,
+      totalRecipients: 0,
       contemplados: [],
+      externos: [],
       tipo: 'nenhum'
     };
   }
 
-  const totalPagantes       = totalPart - qtdContems;
+  const totalPagantes       = totalPart - qtdRegis;
   const valorArrecadado     = totalPagantes * parcela;
-  const valorPorContemplado = valorArrecadado / qtdContems;
+  const valorPorContemplado = totalRecipients > 0 ? valorArrecadado / totalRecipients : 0;
+  const tipoCalc            = totalRecipients > 1 ? 'dividido' : 'individual';
 
   return {
     totalPagantes,
     valorArrecadado,
     valorPorContemplado,
-    qtdContemplados: qtdContems,
+    qtdContemplados: qtdRegis,
+    totalRecipients,
     contemplados: contemsIds,
-    tipo: ponto.tipo
+    externos,
+    tipo: tipoCalc
   };
 }
 
@@ -996,17 +1056,21 @@ function renderDashboard() {
   document.getElementById('dash-title').textContent = db.caixa.nome;
 
   /* Hero */
+  const externos_mes = (ponto && ponto.externos) || [];
+  const todosRecebedores = [
+    ...calc.contemplados.map(id => primNome(partById(id)?.nome || '?')),
+    ...externos_mes
+  ];
   let heroHTML = `<div class="hero-month">${MESES[mesAtual-1]} ${db.caixa.ano}</div>`;
 
-  if (calc.qtdContemplados > 0) {
-    const nomes = calc.contemplados.map(id => primNome(partById(id)?.nome || '?')).join(' & ');
-    const tipoBadge = ponto.tipo === 'dividido' ? '✂️ Ponto Dividido' : '⭐ Ponto Individual';
+  if (calc.totalRecipients > 0) {
+    const tipoBadge = calc.tipo === 'dividido' ? '✂️ Ponto Dividido' : '⭐ Ponto Individual';
     heroHTML += `
-      <div class="hero-name">${nomes}</div>
+      <div class="hero-name">${todosRecebedores.join(' & ')}</div>
       <div class="hero-badge">${tipoBadge}</div>
       <div class="hero-value">${fmt(calc.valorPorContemplado)}</div>
-      ${calc.qtdContemplados > 1
-        ? `<div class="hero-sub">${fmt(calc.valorArrecadado)} ÷ ${calc.qtdContemplados} = ${fmt(calc.valorPorContemplado)} cada</div>`
+      ${calc.totalRecipients > 1
+        ? `<div class="hero-sub">${fmt(calc.valorArrecadado)} ÷ ${calc.totalRecipients} = ${fmt(calc.valorPorContemplado)} cada</div>`
         : `<div class="hero-sub">${calc.totalPagantes} pagantes × ${fmt(db.caixa.valor_parcela)}</div>`}
     `;
   } else {
@@ -1057,9 +1121,12 @@ function renderDashboard() {
     if (isCurrent) chipClass += ' current';
     else if (todoPago && m < mesAtual) chipClass += ' all-paid';
 
-    const label = c.contemplados.length > 0
-      ? c.contemplados.map(id => (partById(id)?.nome || '?')[0].toUpperCase()).join('+')
-      : '—';
+    const p_ext = (db.pontos.find(p => p.mes === m) || {}).externos || [];
+    const todosRec = [
+      ...c.contemplados.map(id => (partById(id)?.nome || '?')[0].toUpperCase()),
+      ...p_ext.map(n => n[0].toUpperCase())
+    ];
+    const label = todosRec.length > 0 ? todosRec.join('+') : '—';
 
     return `
       <div class="${chipClass}" onclick="irPagMes(${m})" title="${nm}">
@@ -1189,27 +1256,39 @@ function renderPontos() {
 
   document.getElementById('pontos-list').innerHTML = db.pontos.map(ponto => {
     const calc      = calcularContemplacao(ponto.mes);
+    const externos  = ponto.externos || [];
     const contems   = ponto.contemplados.map(id => partById(id)).filter(Boolean);
-    const nomes     = contems.length > 0 ? contems.map(p => primNome(p.nome)).join(' & ') : 'Não definido';
+    const temAlguem = contems.length > 0 || externos.length > 0;
+
+    // Montar lista de nomes de todos os recebedores
+    const todosNomes = [
+      ...contems.map(p => primNome(p.nome)),
+      ...externos
+    ];
+    const nomesDisplay = temAlguem ? todosNomes.join(' & ') : 'Não definido';
 
     let badge = '';
-    if (contems.length === 0) {
+    if (!temAlguem) {
       badge = '<span class="badge badge-semPonto">Sem ponto</span>';
-    } else if (ponto.tipo === 'dividido') {
+    } else if (calc.tipo === 'dividido') {
       badge = '<span class="badge badge-dividido">✂️ Dividido</span>';
     } else {
       badge = '<span class="badge badge-contemplado">⭐ Individual</span>';
     }
 
     let calcHTML = '';
-    if (contems.length > 0) {
+    if (temAlguem) {
+      const labelExt = externos.length > 0
+        ? `<br><span style="font-size:11px;color:var(--muted)">(${externos.join(', ')} ${externos.length === 1 ? 'é externo' : 'são externos'} — não reduz pagantes)</span>`
+        : '';
       calcHTML = `
         <div class="month-calc">
           ${calc.totalPagantes} pagam × ${fmt(db.caixa.valor_parcela)} =
           <strong>${fmt(calc.valorArrecadado)}</strong>
-          ${calc.qtdContemplados > 1
-            ? ` ÷ ${calc.qtdContemplados} = <strong>${fmt(calc.valorPorContemplado)} cada</strong>`
-            : ` → <strong>${primNome(contems[0].nome)}</strong> recebe tudo`}
+          ${calc.totalRecipients > 1
+            ? ` ÷ ${calc.totalRecipients} = <strong>${fmt(calc.valorPorContemplado)} cada</strong>`
+            : ` → <strong>${todosNomes[0]}</strong> recebe tudo`}
+          ${labelExt}
         </div>`;
     }
 
@@ -1220,9 +1299,9 @@ function renderPontos() {
           ${badge}
         </div>
         <div class="flex-between">
-          <span style="font-weight:600;font-size:15px">${nomes}</span>
+          <span style="font-weight:600;font-size:15px">${nomesDisplay}</span>
           <button class="btn btn-ghost btn-sm" onclick="abrirModalPonto(${ponto.mes})">
-            ${contems.length > 0 ? 'Editar' : 'Definir'}
+            ${temAlguem ? 'Editar' : 'Definir'}
           </button>
         </div>
         ${calcHTML}
@@ -1234,12 +1313,9 @@ function abrirModalPonto(mes) {
   editPontoMes = mes;
   const ponto  = db.pontos.find(p => p.mes === mes);
   selPontoIds  = ponto ? [...ponto.contemplados] : [];
+  selExternos  = ponto ? [...(ponto.externos || [])] : [];
 
-  // Meses já ocupados por participante (exceto o mês atual)
-  const ocupados = {};
-  db.pontos.forEach(p => {
-    if (p.mes !== mes) p.contemplados.forEach(id => { ocupados[id] = p.nome_mes; });
-  });
+  const temPonto = ponto && (ponto.contemplados.length > 0 || (ponto.externos || []).length > 0);
 
   const modal = document.getElementById('modal-ponto');
   modal.style.display = 'flex';
@@ -1250,50 +1326,73 @@ function abrirModalPonto(mes) {
         <span class="modal-title">Ponto de ${MESES[mes-1]}</span>
         <button class="modal-close" onclick="fecharModal('modal-ponto')">✕</button>
       </div>
+
       <p class="text-sm text-muted mb-8">
-        Selecione 1 ou 2 participantes.<br>
-        <strong>Dividido (2 pessoas):</strong> cada um recebe metade do arrecadado.
+        Participantes registrados ficam <strong>isentos</strong> de pagar neste mês.
+        Pessoas externas <strong>não pagam mensalidade</strong>, mas dividem o valor recebido.
       </p>
+
+      <div class="card-label" style="margin-bottom:8px">Participantes do caixa</div>
       <div id="ponto-sel-list"></div>
-      <div class="month-calc mt-12 mb-8" id="ponto-calc-prev" style="min-height:40px"></div>
+
+      <div class="divider"></div>
+
+      <div class="card-label" style="margin-bottom:6px">
+        Pessoas externas
+        <span class="text-xs text-muted" style="font-weight:400;text-transform:none"> — não pagam, mas recebem</span>
+      </div>
+      <div id="externos-tags"></div>
+      <div class="externos-add">
+        <input type="text" id="ext-nome-input" placeholder="Nome da pessoa externa" maxlength="40"
+               onkeydown="if(event.key==='Enter') adicionarExterno()">
+        <button class="btn btn-ghost btn-sm" onclick="adicionarExterno()">+ Adicionar</button>
+      </div>
+
+      <div class="month-calc mt-12 mb-8" id="ponto-calc-prev" style="min-height:44px"></div>
       <button class="btn btn-primary btn-full" onclick="salvarPonto()">Confirmar ponto</button>
-      ${ponto && ponto.contemplados.length > 0
+      ${temPonto
         ? `<button class="btn btn-ghost btn-full mt-8" onclick="limparPonto(${mes})">Remover ponto deste mês</button>`
         : ''}
     </div>
   `;
 
-  renderSelList(ocupados);
+  renderSelList();
+  renderExternosTags();
   atualizarCalcPrev();
 }
 
-function renderSelList(ocupados) {
-  // Se não recebermos ocupados, recalculamos
-  if (!ocupados) {
-    ocupados = {};
-    db.pontos.forEach(p => {
-      if (p.mes !== editPontoMes) p.contemplados.forEach(id => { ocupados[id] = p.nome_mes; });
-    });
-  }
+function renderSelList() {
+  // Outros pontos onde cada participante já aparece (informativo, não bloqueante)
+  const outrosPontos = {};
+  db.pontos.forEach(p => {
+    if (p.mes !== editPontoMes) {
+      p.contemplados.forEach(id => {
+        if (!outrosPontos[id]) outrosPontos[id] = [];
+        outrosPontos[id].push(p.nome_mes);
+      });
+    }
+  });
 
   const ativos = db.participantes.filter(p => p.ativo !== false);
   const listEl = document.getElementById('ponto-sel-list');
   if (!listEl) return;
 
   listEl.innerHTML = ativos.map(p => {
-    const isSel  = selPontoIds.includes(p.id);
-    const oMes   = ocupados[p.id];
-    const isOcup = !!oMes && !isSel;
+    const isSel     = selPontoIds.includes(p.id);
+    const mesesSel  = outrosPontos[p.id] || [];
+    const temOutros = mesesSel.length > 0;
     let cls = 'sel-item';
-    if (isSel)  cls += ' selected';
-    if (isOcup) cls += ' occupied';
+    if (isSel)      cls += ' selected';
+    if (temOutros && !isSel) cls += ' has-other-point';
 
     return `
       <div class="${cls}" id="si-${p.id}" onclick="toggleSelPonto('${p.id}')">
         <div class="avatar" style="width:38px;height:38px;font-size:13px;border-radius:12px">${iniciais(p.nome)}</div>
         <div style="flex:1">
           <div style="font-weight:600;font-size:14px">${p.nome}</div>
-          ${isOcup ? `<div class="text-xs text-muted">Ponto em ${oMes}</div>` : ''}
+          ${temOutros
+            ? `<div class="point-warn">Já tem ponto em: ${mesesSel.join(', ')}</div>`
+            : ''}
         </div>
         ${isSel ? '<span class="check-mark">✓</span>' : ''}
       </div>
@@ -1306,35 +1405,85 @@ function toggleSelPonto(id) {
   if (idx >= 0) {
     selPontoIds.splice(idx, 1);
   } else {
-    if (selPontoIds.length >= 2) { showToast('Máximo 2 participantes por ponto'); return; }
-    selPontoIds.push(id);
+    selPontoIds.push(id); // sem limite — participante pode ter múltiplos pontos
   }
-  renderSelList(null);
+  renderSelList();
+  atualizarCalcPrev();
+}
+
+/* ── Externos ── */
+function renderExternosTags() {
+  const el = document.getElementById('externos-tags');
+  if (!el) return;
+  if (selExternos.length === 0) {
+    el.innerHTML = `<p class="text-xs text-muted" style="margin-bottom:6px">Nenhuma pessoa externa adicionada.</p>`;
+    return;
+  }
+  el.innerHTML = selExternos.map(nome => `
+    <span class="externo-tag">
+      ${nome}
+      <button onclick="removerExterno('${nome.replace(/'/g, "\\'")}')" title="Remover">×</button>
+    </span>
+  `).join('');
+}
+
+function adicionarExterno() {
+  const input = document.getElementById('ext-nome-input');
+  if (!input) return;
+  const nome = input.value.trim();
+  if (!nome) { showToast('Digite o nome da pessoa externa'); return; }
+  if (selExternos.includes(nome)) { showToast('Já adicionado'); return; }
+  selExternos.push(nome);
+  input.value = '';
+  renderExternosTags();
+  atualizarCalcPrev();
+}
+
+function removerExterno(nome) {
+  selExternos = selExternos.filter(n => n !== nome);
+  renderExternosTags();
   atualizarCalcPrev();
 }
 
 function atualizarCalcPrev() {
   const el = document.getElementById('ponto-calc-prev');
   if (!el || !db.caixa) return;
-  const totalPart   = db.participantes.filter(p => p.ativo !== false).length;
-  const qtd         = selPontoIds.length;
-  if (qtd === 0) { el.innerHTML = 'Selecione pelo menos 1 participante.'; return; }
-  const pagantes    = totalPart - qtd;
-  const arrecadado  = pagantes * db.caixa.valor_parcela;
-  const porContemp  = arrecadado / qtd;
+  const totalPart     = db.participantes.filter(p => p.ativo !== false).length;
+  const qtdRegis      = selPontoIds.length;
+  const totalRecip    = qtdRegis + selExternos.length;
+
+  if (totalRecip === 0) { el.innerHTML = 'Selecione pelo menos 1 participante ou externo.'; return; }
+
+  // Só os registrados reduzem os pagantes
+  const pagantes   = totalPart - qtdRegis;
+  const arrecadado = pagantes * db.caixa.valor_parcela;
+  const porRecip   = arrecadado / totalRecip;
+
+  const todosNomes = [
+    ...selPontoIds.map(id => primNome(partById(id)?.nome || '?')),
+    ...selExternos
+  ];
+
   el.innerHTML = `
-    <strong>${pagantes}</strong> pagantes × ${fmt(db.caixa.valor_parcela)} =
-    <strong>${fmt(arrecadado)}</strong>
-    ${qtd > 1 ? ` ÷ ${qtd} = <strong>${fmt(porContemp)} cada</strong>` : ''}
+    <strong>${pagantes}</strong> pagam × ${fmt(db.caixa.valor_parcela)} = <strong>${fmt(arrecadado)}</strong>
+    ${totalRecip > 1
+      ? ` ÷ ${totalRecip} = <strong>${fmt(porRecip)} cada</strong>
+          <br><span style="font-size:11px;color:var(--muted)">${todosNomes.join(' + ')}</span>`
+      : ` → <strong>${todosNomes[0]}</strong>`}
   `;
 }
 
 function salvarPonto() {
-  if (selPontoIds.length === 0) { showToast('Selecione pelo menos 1 participante'); return; }
+  if (selPontoIds.length === 0 && selExternos.length === 0) {
+    showToast('Selecione pelo menos 1 participante ou externo');
+    return;
+  }
   const ponto = db.pontos.find(p => p.mes === editPontoMes);
   if (ponto) {
     ponto.contemplados = [...selPontoIds];
-    ponto.tipo = selPontoIds.length > 1 ? 'dividido' : 'individual';
+    ponto.externos     = [...selExternos];
+    const totalRecip   = selPontoIds.length + selExternos.length;
+    ponto.tipo         = totalRecip > 1 ? 'dividido' : 'individual';
   }
   salvar();
   fecharModal('modal-ponto');
@@ -1345,7 +1494,7 @@ function salvarPonto() {
 function limparPonto(mes) {
   if (!confirm('Remover o ponto deste mês?')) return;
   const ponto = db.pontos.find(p => p.mes === mes);
-  if (ponto) { ponto.contemplados = []; ponto.tipo = 'individual'; }
+  if (ponto) { ponto.contemplados = []; ponto.externos = []; ponto.tipo = 'individual'; }
   salvar();
   fecharModal('modal-ponto');
   renderPontos();
@@ -1380,21 +1529,27 @@ function renderPagamentos() {
   `;
 
   /* Info de contemplação */
-  if (contemsI.length > 0) {
-    const contems = contemsI.map(id => partById(id)).filter(Boolean);
-    const nomes   = contems.map(p => primNome(p.nome)).join(' e ');
-    const tipotxt = ponto.tipo === 'dividido' ? 'Ponto Dividido' : 'Ponto Individual';
-    const icon    = ponto.tipo === 'dividido' ? '✂️' : '⭐';
+  const externos   = (ponto && ponto.externos) || [];
+  const temAlguem  = contemsI.length > 0 || externos.length > 0;
+
+  if (temAlguem) {
+    const contems    = contemsI.map(id => partById(id)).filter(Boolean);
+    const todosNomes = [...contems.map(p => primNome(p.nome)), ...externos];
+    const tipotxt    = calc.tipo === 'dividido' ? 'Ponto Dividido' : 'Ponto Individual';
+    const icon       = calc.tipo === 'dividido' ? '✂️' : '⭐';
+    const labelExt   = externos.length > 0
+      ? `<br><span style="font-size:11px">${externos.join(', ')} ${externos.length === 1 ? 'é externo' : 'são externos'} (não paga mensalidade)</span>`
+      : '';
     document.getElementById('pag-contemp-info').innerHTML = `
       <div class="card" style="border-left:4px solid var(--primary);padding:14px 16px;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:26px">${icon}</span>
           <div>
-            <div style="font-weight:700;font-size:15px">${nomes} — ${tipotxt}</div>
+            <div style="font-weight:700;font-size:15px">${todosNomes.join(' & ')} — ${tipotxt}</div>
             <div class="text-sm text-muted">
-              Recebe ${fmt(calc.valorPorContemplado)}
-              ${calc.qtdContemplados > 1 ? ' cada' : ''}
-              (${calc.totalPagantes} pagam × ${fmt(db.caixa.valor_parcela)})
+              ${fmt(calc.valorPorContemplado)} cada
+              (${calc.totalPagantes} pagam × ${fmt(db.caixa.valor_parcela)} ÷ ${calc.totalRecipients})
+              ${labelExt}
             </div>
           </div>
         </div>
