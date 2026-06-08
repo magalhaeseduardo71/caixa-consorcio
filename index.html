@@ -1,0 +1,1674 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#6C63FF">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Caixa">
+  <title>Caixa</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ===== RESET ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    button { font-family: inherit; cursor: pointer; }
+
+    /* ===== TOKENS ===== */
+    :root {
+      --primary:        #6C63FF;
+      --primary-dark:   #5A52D5;
+      --primary-light:  #EEF0FF;
+      --success:        #00C896;
+      --success-light:  #E6FAF5;
+      --warning:        #FFB347;
+      --warning-light:  #FFF3E0;
+      --danger:         #FF6B6B;
+      --danger-light:   #FFE8E8;
+      --bg:             #F7F8FC;
+      --surface:        #FFFFFF;
+      --text:           #1A1A2E;
+      --muted:          #8A8FA8;
+      --border:         #E8E9F0;
+      --nav-h:          68px;
+      --radius-lg:      16px;
+      --radius-md:      12px;
+      --shadow:         0 2px 12px rgba(0,0,0,0.06);
+    }
+
+    /* ===== BASE ===== */
+    html, body {
+      height: 100%;
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    .app {
+      max-width: 430px;
+      margin: 0 auto;
+      min-height: 100%;
+      position: relative;
+    }
+
+    /* ===== SCREENS ===== */
+    .screen {
+      display: none;
+      min-height: 100vh;
+      padding-bottom: calc(var(--nav-h) + 12px);
+      animation: fadeUp .2s ease;
+    }
+    .screen.active { display: block; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== HEADER ===== */
+    .screen-header {
+      background: var(--surface);
+      padding: 48px 20px 18px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .screen-header h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .screen-header .subtitle {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 2px;
+    }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    /* ===== CONTENT ===== */
+    .content { padding: 16px; }
+
+    /* ===== CARDS ===== */
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      margin-bottom: 12px;
+    }
+    .card-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      margin-bottom: 14px;
+    }
+
+    /* ===== HERO CARD ===== */
+    .hero {
+      background: linear-gradient(135deg, var(--primary) 0%, #9B59FF 100%);
+      color: white;
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      position: relative;
+    }
+    .hero::before, .hero::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255,255,255,.07);
+    }
+    .hero::before { width: 160px; height: 160px; top: -60px; right: -40px; }
+    .hero::after  { width: 100px; height: 100px; bottom: -30px; left: -20px; }
+    .hero-month  { font-size: 12px; opacity: .8; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+    .hero-name   { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+    .hero-value  { font-family: 'Syne', sans-serif; font-size: 38px; font-weight: 800; line-height: 1; }
+    .hero-sub    { font-size: 13px; opacity: .8; margin-top: 4px; }
+    .hero-badge  {
+      display: inline-block;
+      background: rgba(255,255,255,.2);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+    .progress-wrap { margin-top: 16px; }
+    .progress-meta { display: flex; justify-content: space-between; font-size: 12px; opacity: .9; margin-bottom: 6px; }
+    .progress-track { height: 7px; background: rgba(255,255,255,.25); border-radius: 4px; overflow: hidden; }
+    .progress-fill  { height: 100%; background: rgba(255,255,255,.85); border-radius: 4px; transition: width .5s ease; }
+
+    /* ===== STAT GRID ===== */
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .stat-card { background: var(--surface); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow); }
+    .stat-lbl  { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .stat-val  { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 700; }
+    .stat-val.c-primary { color: var(--primary); }
+    .stat-val.c-success { color: var(--success); }
+    .stat-val.c-warning { color: var(--warning); }
+
+    /* ===== BADGES ===== */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-pago        { background: var(--success-light); color: var(--success); }
+    .badge-pendente    { background: var(--warning-light); color: var(--warning); }
+    .badge-contemplado { background: var(--primary-light); color: var(--primary); }
+    .badge-dividido    { background: #FFF0F6; color: #D6006C; }
+    .badge-semPonto    { background: var(--border); color: var(--muted); }
+
+    /* ===== BUTTONS ===== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: transform .15s, opacity .15s;
+      text-decoration: none;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-success { background: var(--success); color: white; }
+    .btn-success:hover { opacity: .9; }
+    .btn-ghost   { background: var(--bg); color: var(--text); }
+    .btn-ghost:hover { background: var(--border); }
+    .btn-danger  { background: var(--danger-light); color: var(--danger); }
+    .btn-wa      { background: #25D366; color: white; }
+    .btn-wa:hover { opacity: .9; }
+    .btn-full    { width: 100%; }
+    .btn-sm      { padding: 8px 14px; font-size: 13px; border-radius: 10px; }
+    .btn-icon    { width: 38px; height: 38px; padding: 0; border-radius: 11px; font-size: 16px; }
+
+    /* ===== FORMS ===== */
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    input, select, textarea {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      color: var(--text);
+      background: var(--surface);
+      outline: none;
+      transition: border-color .2s;
+      -webkit-appearance: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+    textarea { resize: vertical; min-height: 140px; line-height: 1.5; }
+    .input-pfx { position: relative; }
+    .input-pfx .pfx { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+    .input-pfx input { padding-left: 36px; }
+    .helper-text { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* ===== TOGGLE (iOS) ===== */
+    .toggle-wrap { display: flex; align-items: center; gap: 10px; }
+    .toggle {
+      position: relative;
+      width: 50px;
+      height: 28px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .tog-track {
+      position: absolute;
+      inset: 0;
+      background: var(--border);
+      border-radius: 14px;
+      transition: background .25s;
+    }
+    .tog-thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
+      background: white;
+      border-radius: 50%;
+      box-shadow: 0 1px 4px rgba(0,0,0,.25);
+      transition: transform .25s;
+    }
+    .toggle input:checked + .tog-track { background: var(--success); }
+    .toggle input:checked ~ .tog-thumb { transform: translateX(22px); }
+
+    /* ===== PARTICIPANT CARD ===== */
+    .p-card {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: var(--shadow);
+      margin-bottom: 10px;
+    }
+    .avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: var(--primary-light);
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+    .p-info { flex: 1; min-width: 0; }
+    .p-name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .p-sub  { color: var(--muted); font-size: 13px; margin-top: 2px; }
+    .p-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    /* ===== MONTH SELECTOR ===== */
+    .month-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 12px 16px;
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+    }
+    .month-nav button {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      border: none;
+      background: var(--bg);
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .month-nav button:hover { background: var(--border); }
+    .month-nav-label { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 17px; }
+
+    /* ===== SUMMARY BAR ===== */
+    .sumbar {
+      background: var(--primary);
+      color: white;
+      border-radius: var(--radius-lg);
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .sumbar-lbl  { font-size: 12px; opacity: .8; }
+    .sumbar-val  { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin-top: 2px; }
+
+    /* ===== PAYMENT ITEM ===== */
+    .pay-item {
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 13px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.04);
+      margin-bottom: 8px;
+    }
+    .pay-info { flex: 1; min-width: 0; }
+
+    /* ===== PONTO MONTH CARD ===== */
+    .month-card {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      margin-bottom: 10px;
+      box-shadow: var(--shadow);
+    }
+    .month-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .month-card-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 16px; }
+    .month-calc {
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 12px;
+      line-height: 1.6;
+    }
+    .month-calc strong { color: var(--text); }
+
+    /* ===== MONTH GRID (annual view) ===== */
+    .year-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .yr-chip {
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 10px 6px;
+      text-align: center;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all .2s;
+    }
+    .yr-chip.current  { border-color: var(--primary); background: var(--primary-light); }
+    .yr-chip.all-paid { background: var(--success-light); }
+    .yr-chip-val  { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .yr-chip.current .yr-chip-val  { color: var(--primary); }
+    .yr-chip.all-paid .yr-chip-val { color: var(--success); }
+    .yr-chip-name { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; margin-top: 2px; }
+
+    /* ===== BOTTOM NAV ===== */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 430px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      z-index: 100;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 4px;
+      gap: 3px;
+      color: var(--muted);
+      background: none;
+      border: none;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: color .2s;
+    }
+    .nav-btn .ni { font-size: 21px; transition: transform .2s; }
+    .nav-btn .nl { font-size: 9px; font-weight: 600; }
+    .nav-btn.active { color: var(--primary); }
+    .nav-btn.active .ni { transform: translateY(-2px); }
+
+    /* ===== SETUP SCREEN ===== */
+    .setup-top {
+      text-align: center;
+      padding: 60px 24px 32px;
+    }
+    .setup-logo {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, var(--primary), #9B59FF);
+      border-radius: 24px;
+      margin: 0 auto 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      box-shadow: 0 8px 24px rgba(108,99,255,.3);
+    }
+    .setup-top h1 { font-family: 'Syne', sans-serif; font-size: 30px; font-weight: 800; margin-bottom: 8px; }
+    .setup-top p  { color: var(--muted); font-size: 15px; }
+    .setup-form   { padding: 0 20px 40px; }
+
+    /* ===== MODAL ===== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.5);
+      z-index: 200;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      animation: fadeIn .2s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-box {
+      background: var(--surface);
+      border-radius: 24px 24px 0 0;
+      padding: 24px 20px calc(32px + env(safe-area-inset-bottom, 0px));
+      width: 100%;
+      max-width: 430px;
+      max-height: 90vh;
+      overflow-y: auto;
+      animation: slideUp .28s ease;
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .modal-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; }
+    .modal-close { width: 34px; height: 34px; border-radius: 10px; border: none; background: var(--bg); font-size: 18px; cursor: pointer; }
+
+    /* ===== SELECT ITEM (ponto modal) ===== */
+    .sel-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 2px solid var(--border);
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all .2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sel-item.selected { border-color: var(--primary); background: var(--primary-light); }
+    .sel-item.occupied { opacity: .45; cursor: not-allowed; }
+    .sel-item .check-mark { color: var(--primary); font-size: 20px; margin-left: auto; }
+
+    /* ===== TOAST ===== */
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(26,26,46,.92);
+      color: white;
+      padding: 11px 20px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 999;
+      white-space: nowrap;
+      animation: slideDown .25s ease;
+      pointer-events: none;
+    }
+    @keyframes slideDown {
+      from { transform: translateX(-50%) translateY(-12px); opacity: 0; }
+      to   { transform: translateX(-50%) translateY(0);   opacity: 1; }
+    }
+
+    /* ===== EMPTY STATE ===== */
+    .empty {
+      text-align: center;
+      padding: 56px 24px;
+      color: var(--muted);
+    }
+    .empty-icon { font-size: 52px; margin-bottom: 12px; }
+    .empty p    { font-size: 14px; line-height: 1.6; }
+
+    /* ===== DANGER ZONE ===== */
+    .danger-zone {
+      border: 2px solid var(--danger);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      margin-top: 24px;
+    }
+    .danger-zone h3 { color: var(--danger); font-size: 13px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; }
+
+    /* ===== UTILS ===== */
+    .divider { height: 1px; background: var(--border); margin: 16px 0; }
+    .mt-8  { margin-top: 8px;  }
+    .mt-12 { margin-top: 12px; }
+    .mt-16 { margin-top: 16px; }
+    .mb-8  { margin-bottom: 8px; }
+    .mb-0  { margin-bottom: 0; }
+    .flex-between { display: flex; align-items: center; justify-content: space-between; }
+    .text-muted   { color: var(--muted); }
+    .text-sm      { font-size: 13px; }
+    .text-xs      { font-size: 11px; }
+    .fw-700       { font-weight: 700; }
+    .c-primary    { color: var(--primary); }
+    .c-success    { color: var(--success); }
+
+    /* ===== BULK QUEUE ===== */
+    .bulk-box { text-align: center; background: var(--bg); border-radius: 14px; padding: 20px; }
+    .bulk-prog { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+    .bulk-name { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .bulk-tel  { color: var(--muted); font-size: 14px; margin-bottom: 16px; }
+
+    /* ===== SETTINGS ===== */
+    .cfg-section { padding: 16px; }
+    .info-pill {
+      background: var(--primary-light);
+      color: var(--primary);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============================================================ -->
+  <!-- SCREEN: SETUP                                                 -->
+  <!-- ============================================================ -->
+  <section id="screen-setup" class="screen">
+    <div class="setup-top">
+      <div class="setup-logo">💰</div>
+      <h1>Caixa</h1>
+      <p>Configure seu consórcio informal</p>
+    </div>
+    <div class="setup-form">
+      <div class="form-group">
+        <label>Nome do Caixa</label>
+        <input type="text" id="s-nome" placeholder="Ex: Caixa 2025">
+      </div>
+      <div class="form-group">
+        <label>Ano</label>
+        <input type="number" id="s-ano" placeholder="2025" min="2020" max="2035">
+      </div>
+      <div class="form-group">
+        <label>Valor da Parcela Mensal</label>
+        <div class="input-pfx">
+          <span class="pfx">R$</span>
+          <input type="number" id="s-parcela" placeholder="300" min="1" oninput="atualizarPreviewSetup()">
+        </div>
+        <p class="helper-text">Valor total do caixa: <strong id="s-total-preview">R$ 3.600,00</strong></p>
+      </div>
+      <div class="form-group">
+        <label>Chave PIX</label>
+        <input type="text" id="s-pix" placeholder="CPF, telefone, e-mail ou chave aleatória">
+      </div>
+      <div class="form-group">
+        <label>Seu Nome (responsável)</label>
+        <input type="text" id="s-dono" placeholder="Ex: Eduardo">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="salvarSetup()">Criar Caixa →</button>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- SCREEN: DASHBOARD                                            -->
+  <!-- ============================================================ -->
+  <section id="screen-dashboard" class="screen">
+    <div class="screen-header">
+      <div class="header-row">
+        <div>
+          <h1 id="dash-title">Caixa</h1>
+          <p class="subtitle">Consórcio Informal</p>
+        </div>
+        <button class="btn btn-ghost btn-icon" onclick="showScreen('configuracoes')">⚙️</button>
+      </div>
+    </div>
+    <div class="content">
+      <div id="dash-hero"></div>
+      <div class="stat-grid" id="dash-stats"></div>
+      <div class="card mb-0">
+        <div class="card-label">Visão do Ano</div>
+        <div class="year-grid" id="dash-year-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- SCREEN: PARTICIPANTES                                        -->
+  <!-- ============================================================ -->
+  <section id="screen-participantes" class="screen">
+    <div class="screen-header">
+      <div class="header-row">
+        <div>
+          <h1>Participantes</h1>
+          <p class="subtitle" id="part-count">0 cadastrados</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalParticipante(null)">+ Adicionar</button>
+      </div>
+    </div>
+    <div class="content" id="part-list"></div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- SCREEN: PONTOS                                               -->
+  <!-- ============================================================ -->
+  <section id="screen-pontos" class="screen">
+    <div class="screen-header">
+      <h1>Pontos de Contemplação</h1>
+      <p class="subtitle">Quem recebe em cada mês</p>
+    </div>
+    <div class="content" id="pontos-list"></div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- SCREEN: PAGAMENTOS                                           -->
+  <!-- ============================================================ -->
+  <section id="screen-pagamentos" class="screen">
+    <div class="screen-header">
+      <h1>Pagamentos</h1>
+    </div>
+    <div class="content">
+      <div class="month-nav">
+        <button onclick="mudarMes(-1)">‹</button>
+        <span class="month-nav-label" id="pag-mes-label">Janeiro</span>
+        <button onclick="mudarMes(1)">›</button>
+      </div>
+      <div class="sumbar" id="pag-sumbar"></div>
+      <div id="pag-contemp-info"></div>
+      <div id="pag-list"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- SCREEN: WHATSAPP                                             -->
+  <!-- ============================================================ -->
+  <section id="screen-whatsapp" class="screen">
+    <div class="screen-header">
+      <h1>WhatsApp</h1>
+      <p class="subtitle">Lembretes de pagamento</p>
+    </div>
+    <div class="content">
+      <div class="card">
+        <div class="card-label">Mensagem Padrão (editável)</div>
+        <div class="form-group mb-0">
+          <textarea id="wa-template" rows="9"></textarea>
+        </div>
+        <p class="helper-text mt-8">Variáveis disponíveis: [NOME], [MÊS], [CHAVE_PIX], [NOME_DONO]</p>
+        <button class="btn btn-ghost btn-sm mt-8" onclick="salvarTemplate()">💾 Salvar modelo</button>
+      </div>
+      <div class="card">
+        <div class="card-label">Envio em Massa</div>
+        <div id="wa-bulk"></div>
+      </div>
+      <div class="card mb-0">
+        <div class="card-label">Envio Individual</div>
+        <div id="wa-individual"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- SCREEN: CONFIGURAÇÕES                                        -->
+  <!-- ============================================================ -->
+  <section id="screen-configuracoes" class="screen">
+    <div class="screen-header">
+      <div class="header-row">
+        <h1>Configurações</h1>
+        <button class="btn btn-ghost btn-icon" onclick="showScreen('dashboard')">✕</button>
+      </div>
+    </div>
+    <div class="cfg-section">
+      <div class="info-pill">
+        ℹ️ Para importar um caixa em andamento, cadastre os participantes, defina os pontos e então marque os pagamentos dos meses já realizados na tela de Pagamentos.
+      </div>
+      <div class="form-group">
+        <label>Nome do Caixa</label>
+        <input type="text" id="cfg-nome">
+      </div>
+      <div class="form-group">
+        <label>Ano</label>
+        <input type="number" id="cfg-ano">
+      </div>
+      <div class="form-group">
+        <label>Valor da Parcela Mensal</label>
+        <div class="input-pfx">
+          <span class="pfx">R$</span>
+          <input type="number" id="cfg-parcela">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Chave PIX</label>
+        <input type="text" id="cfg-pix">
+      </div>
+      <div class="form-group">
+        <label>Nome do Responsável</label>
+        <input type="text" id="cfg-dono">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="salvarConfiguracoes()">Salvar Configurações</button>
+      <div class="danger-zone">
+        <h3>⚠️ Zona de Risco</h3>
+        <button class="btn btn-danger btn-full" onclick="resetarApp()">Apagar todos os dados</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- BOTTOM NAV                                                   -->
+  <!-- ============================================================ -->
+  <nav class="bottom-nav" id="bottom-nav">
+    <button class="nav-btn" data-s="dashboard"     onclick="showScreen('dashboard')">
+      <span class="ni">🏠</span><span class="nl">Início</span>
+    </button>
+    <button class="nav-btn" data-s="participantes" onclick="showScreen('participantes')">
+      <span class="ni">👥</span><span class="nl">Pessoas</span>
+    </button>
+    <button class="nav-btn" data-s="pontos"        onclick="showScreen('pontos')">
+      <span class="ni">🎯</span><span class="nl">Pontos</span>
+    </button>
+    <button class="nav-btn" data-s="pagamentos"    onclick="showScreen('pagamentos')">
+      <span class="ni">💳</span><span class="nl">Pagar</span>
+    </button>
+    <button class="nav-btn" data-s="whatsapp"      onclick="showScreen('whatsapp')">
+      <span class="ni">💬</span><span class="nl">WhatsApp</span>
+    </button>
+  </nav>
+
+</div><!-- /.app -->
+
+<!-- Modais (injetados via JS) -->
+<div id="modal-part"  style="display:none"></div>
+<div id="modal-ponto" style="display:none"></div>
+
+<!-- ============================================================ -->
+<!-- JAVASCRIPT                                                    -->
+<!-- ============================================================ -->
+<script>
+'use strict';
+
+/* ──────────────────────────────────────────────
+   CONSTANTES
+────────────────────────────────────────────── */
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+               'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+const STORAGE_KEY = 'caixa_app';
+
+const MSG_PADRAO = `Olá [NOME]! Bom dia 😊
+
+Passando para lembrar que a data do nosso caixa se aproxima — vencimento dia 10 de [MÊS].
+
+Conto com a sua colaboração para efetuar o pagamento dentro do prazo.
+
+💳 Chave PIX: [CHAVE_PIX]
+👤 Nome: [NOME_DONO]
+
+Esta é uma mensagem automática.`;
+
+/* ──────────────────────────────────────────────
+   ESTADO
+────────────────────────────────────────────── */
+let db = {
+  caixa: null,
+  participantes: [],
+  pontos: MESES.map((n, i) => ({ mes: i+1, nome_mes: n, contemplados: [], tipo: 'individual' })),
+  pagamentos: []
+};
+
+let mesPagamentos = new Date().getMonth() + 1; // mês atual
+let editPontoMes  = null;
+let selPontoIds   = [];        // IDs selecionados no modal de ponto
+let bulkFila      = [];
+let bulkIdx       = 0;
+
+/* ──────────────────────────────────────────────
+   PERSISTÊNCIA
+────────────────────────────────────────────── */
+function carregar() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    db = parsed;
+    // Garantir 12 meses em pontos
+    if (!Array.isArray(db.pontos) || db.pontos.length !== 12) {
+      db.pontos = MESES.map((n, i) => {
+        const ex = (db.pontos || []).find(p => p.mes === i+1);
+        return ex || { mes: i+1, nome_mes: n, contemplados: [], tipo: 'individual' };
+      });
+    }
+    if (!Array.isArray(db.participantes)) db.participantes = [];
+    if (!Array.isArray(db.pagamentos))    db.pagamentos    = [];
+  } catch(e) { console.error('Erro ao carregar dados', e); }
+}
+
+function salvar() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+}
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+}
+
+/* ──────────────────────────────────────────────
+   LÓGICA DE NEGÓCIO — CÁLCULO DE CONTEMPLAÇÃO
+
+   Fórmula correta (do CLAUDE.md):
+     total_pagantes       = total_participantes - qtd_contemplados
+     valor_arrecadado     = total_pagantes × valor_parcela
+     valor_por_contemplado= valor_arrecadado ÷ qtd_contemplados
+────────────────────────────────────────────── */
+function calcularContemplacao(mes) {
+  const ponto          = db.pontos.find(p => p.mes === mes);
+  const ativos         = db.participantes.filter(p => p.ativo !== false);
+  const totalPart      = ativos.length;
+  const parcela        = db.caixa ? db.caixa.valor_parcela : 0;
+  const contemsIds     = (ponto && ponto.contemplados) ? ponto.contemplados : [];
+  const qtdContems     = contemsIds.length;
+
+  if (qtdContems === 0) {
+    return {
+      totalPagantes: totalPart,
+      valorArrecadado: totalPart * parcela,
+      valorPorContemplado: 0,
+      qtdContemplados: 0,
+      contemplados: [],
+      tipo: 'nenhum'
+    };
+  }
+
+  const totalPagantes       = totalPart - qtdContems;
+  const valorArrecadado     = totalPagantes * parcela;
+  const valorPorContemplado = valorArrecadado / qtdContems;
+
+  return {
+    totalPagantes,
+    valorArrecadado,
+    valorPorContemplado,
+    qtdContemplados: qtdContems,
+    contemplados: contemsIds,
+    tipo: ponto.tipo
+  };
+}
+
+function isContemplado(partId, mes) {
+  const p = db.pontos.find(p => p.mes === mes);
+  return p ? p.contemplados.includes(partId) : false;
+}
+
+function getPagamento(partId, mes) {
+  return db.pagamentos.find(p => p.participante_id === partId && p.mes === mes) || null;
+}
+
+function estatisticasMes(mes) {
+  const contemsIds = (db.pontos.find(p => p.mes === mes) || {}).contemplados || [];
+  const pagadores  = db.participantes.filter(p => p.ativo !== false && !contemsIds.includes(p.id));
+  const pagos      = pagadores.filter(p => {
+    const pag = getPagamento(p.id, mes);
+    return pag && pag.status === 'pago';
+  });
+  return { pagadores, pagos };
+}
+
+/* ──────────────────────────────────────────────
+   HELPERS DE UI
+────────────────────────────────────────────── */
+function fmt(v) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+}
+
+function iniciais(nome) {
+  return nome.trim().split(/\s+/).slice(0, 2).map(n => n[0].toUpperCase()).join('');
+}
+
+function partById(id) {
+  return db.participantes.find(p => p.id === id) || null;
+}
+
+function primNome(nome) {
+  return nome ? nome.trim().split(' ')[0] : '?';
+}
+
+function showToast(msg, dur = 2500) {
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), dur);
+}
+
+/* ──────────────────────────────────────────────
+   ROTEAMENTO
+────────────────────────────────────────────── */
+function showScreen(id) {
+  const nav = document.getElementById('bottom-nav');
+  nav.style.display = (id === 'setup' || id === 'configuracoes') ? 'none' : 'flex';
+
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const nb = document.querySelector(`.nav-btn[data-s="${id}"]`);
+  if (nb) nb.classList.add('active');
+
+  const renders = {
+    dashboard:      renderDashboard,
+    participantes:  renderParticipantes,
+    pontos:         renderPontos,
+    pagamentos:     renderPagamentos,
+    whatsapp:       renderWhatsapp,
+    configuracoes:  renderConfiguracoes
+  };
+  if (renders[id]) renders[id]();
+}
+
+/* ──────────────────────────────────────────────
+   SETUP
+────────────────────────────────────────────── */
+function atualizarPreviewSetup() {
+  const v   = parseFloat(document.getElementById('s-parcela').value) || 0;
+  const el  = document.getElementById('s-total-preview');
+  if (el) el.textContent = fmt(v * 12);
+}
+
+function salvarSetup() {
+  const nome   = document.getElementById('s-nome').value.trim();
+  const ano    = parseInt(document.getElementById('s-ano').value) || new Date().getFullYear();
+  const parc   = parseFloat(document.getElementById('s-parcela').value);
+  const pix    = document.getElementById('s-pix').value.trim();
+  const dono   = document.getElementById('s-dono').value.trim();
+
+  if (!nome || !parc || !dono) { showToast('Preencha Nome, Parcela e Responsável'); return; }
+
+  db.caixa = {
+    id: uid(), nome, ano,
+    valor_total: parc * 12,
+    valor_parcela: parc,
+    total_meses: 12,
+    chave_pix: pix,
+    nome_dono: dono,
+    criado_em: new Date().toISOString().split('T')[0]
+  };
+
+  salvar();
+  showScreen('dashboard');
+}
+
+/* ──────────────────────────────────────────────
+   DASHBOARD
+────────────────────────────────────────────── */
+function renderDashboard() {
+  if (!db.caixa) return;
+
+  const mesAtual = new Date().getMonth() + 1;
+  const calc     = calcularContemplacao(mesAtual);
+  const ponto    = db.pontos.find(p => p.mes === mesAtual);
+  const { pagadores, pagos } = estatisticasMes(mesAtual);
+  const pct      = pagadores.length > 0 ? Math.round(pagos.length / pagadores.length * 100) : 0;
+
+  document.getElementById('dash-title').textContent = db.caixa.nome;
+
+  /* Hero */
+  let heroHTML = `<div class="hero-month">${MESES[mesAtual-1]} ${db.caixa.ano}</div>`;
+
+  if (calc.qtdContemplados > 0) {
+    const nomes = calc.contemplados.map(id => primNome(partById(id)?.nome || '?')).join(' & ');
+    const tipoBadge = ponto.tipo === 'dividido' ? '✂️ Ponto Dividido' : '⭐ Ponto Individual';
+    heroHTML += `
+      <div class="hero-name">${nomes}</div>
+      <div class="hero-badge">${tipoBadge}</div>
+      <div class="hero-value">${fmt(calc.valorPorContemplado)}</div>
+      ${calc.qtdContemplados > 1
+        ? `<div class="hero-sub">${fmt(calc.valorArrecadado)} ÷ ${calc.qtdContemplados} = ${fmt(calc.valorPorContemplado)} cada</div>`
+        : `<div class="hero-sub">${calc.totalPagantes} pagantes × ${fmt(db.caixa.valor_parcela)}</div>`}
+    `;
+  } else {
+    heroHTML += `
+      <div class="hero-name">Sem contemplado definido</div>
+      <div class="hero-badge">Mês não configurado</div>
+      <div class="hero-value">${fmt(calc.valorArrecadado)}</div>
+      <div class="hero-sub">Configure na aba Pontos</div>
+    `;
+  }
+
+  heroHTML += `
+    <div class="progress-wrap">
+      <div class="progress-meta">
+        <span>${pagos.length} de ${pagadores.length} pagaram</span>
+        <span>${pct}%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" style="width:${pct}%"></div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('dash-hero').innerHTML = `<div class="hero">${heroHTML}</div>`;
+
+  /* Stats */
+  const totalArrecMes = pagos.length * db.caixa.valor_parcela;
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-lbl">Arrecadado no mês</div>
+      <div class="stat-val c-primary">${fmt(totalArrecMes)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-lbl">Aguardando</div>
+      <div class="stat-val c-warning">${pagadores.length - pagos.length}</div>
+    </div>
+  `;
+
+  /* Ano Grid */
+  const gridHTML = MESES.map((nm, i) => {
+    const m = i + 1;
+    const c = calcularContemplacao(m);
+    const { pagadores: pg, pagos: pgs } = estatisticasMes(m);
+    const todoPago = pg.length > 0 && pgs.length === pg.length;
+    const isCurrent = m === mesAtual;
+
+    let chipClass = 'yr-chip';
+    if (isCurrent) chipClass += ' current';
+    else if (todoPago && m < mesAtual) chipClass += ' all-paid';
+
+    const label = c.contemplados.length > 0
+      ? c.contemplados.map(id => (partById(id)?.nome || '?')[0].toUpperCase()).join('+')
+      : '—';
+
+    return `
+      <div class="${chipClass}" onclick="irPagMes(${m})" title="${nm}">
+        <div class="yr-chip-val">${label}</div>
+        <div class="yr-chip-name">${nm.slice(0,3)}</div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('dash-year-grid').innerHTML = gridHTML;
+}
+
+function irPagMes(mes) {
+  mesPagamentos = mes;
+  showScreen('pagamentos');
+}
+
+/* ──────────────────────────────────────────────
+   PARTICIPANTES
+────────────────────────────────────────────── */
+function renderParticipantes() {
+  const ativos = db.participantes.filter(p => p.ativo !== false);
+  document.getElementById('part-count').textContent =
+    `${ativos.length} cadastrado${ativos.length !== 1 ? 's' : ''}`;
+
+  if (ativos.length === 0) {
+    document.getElementById('part-list').innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">👥</div>
+        <p>Nenhum participante ainda.<br>Toque em "+ Adicionar" para começar.</p>
+      </div>`;
+    return;
+  }
+
+  document.getElementById('part-list').innerHTML = ativos.map(p => `
+    <div class="p-card">
+      <div class="avatar">${iniciais(p.nome)}</div>
+      <div class="p-info">
+        <div class="p-name">${p.nome}</div>
+        <div class="p-sub">${p.telefone ? p.telefone : 'Sem telefone'}</div>
+      </div>
+      <div class="p-actions">
+        <button class="btn btn-ghost btn-icon" onclick="abrirModalParticipante('${p.id}')">✏️</button>
+        <button class="btn btn-ghost btn-icon" onclick="excluirParticipante('${p.id}')">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function abrirModalParticipante(id) {
+  const p = id ? partById(id) : null;
+  const modal = document.getElementById('modal-part');
+  modal.style.display = 'flex';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-head">
+        <span class="modal-title">${p ? 'Editar' : 'Novo'} Participante</span>
+        <button class="modal-close" onclick="fecharModal('modal-part')">✕</button>
+      </div>
+      <div class="form-group">
+        <label>Nome Completo</label>
+        <input type="text" id="mp-nome" placeholder="Nome completo" value="${p ? p.nome : ''}">
+      </div>
+      <div class="form-group">
+        <label>WhatsApp (DDD + número, sem espaços)</label>
+        <input type="tel" id="mp-tel" placeholder="71999999999"
+               value="${p && p.telefone ? p.telefone : ''}" inputmode="numeric">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="salvarParticipante('${id || ''}')">
+        ${p ? 'Salvar alterações' : 'Adicionar participante'}
+      </button>
+    </div>
+  `;
+  setTimeout(() => document.getElementById('mp-nome').focus(), 100);
+}
+
+function salvarParticipante(id) {
+  const nome = document.getElementById('mp-nome').value.trim();
+  const tel  = document.getElementById('mp-tel').value.replace(/\D/g, '');
+
+  if (!nome) { showToast('Informe o nome'); return; }
+
+  if (id) {
+    const p = partById(id);
+    if (p) { p.nome = nome; p.telefone = tel; }
+  } else {
+    db.participantes.push({ id: uid(), nome, telefone: tel, ativo: true });
+  }
+
+  salvar();
+  fecharModal('modal-part');
+  renderParticipantes();
+  showToast(id ? 'Participante atualizado!' : 'Participante adicionado!');
+}
+
+function excluirParticipante(id) {
+  if (!confirm('Excluir este participante?')) return;
+  const temPonto = db.pontos.some(p => p.contemplados.includes(id));
+  if (temPonto) { showToast('Remova o ponto deste participante primeiro'); return; }
+  db.participantes = db.participantes.filter(p => p.id !== id);
+  db.pagamentos    = db.pagamentos.filter(p => p.participante_id !== id);
+  salvar();
+  renderParticipantes();
+  showToast('Participante removido');
+}
+
+/* ──────────────────────────────────────────────
+   PONTOS DE CONTEMPLAÇÃO
+────────────────────────────────────────────── */
+function renderPontos() {
+  const ativos = db.participantes.filter(p => p.ativo !== false);
+
+  if (ativos.length === 0) {
+    document.getElementById('pontos-list').innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">🎯</div>
+        <p>Cadastre participantes primeiro.</p>
+        <button class="btn btn-primary mt-16" onclick="showScreen('participantes')" style="display:inline-flex">
+          Ir para Participantes
+        </button>
+      </div>`;
+    return;
+  }
+
+  if (!db.caixa) return;
+
+  document.getElementById('pontos-list').innerHTML = db.pontos.map(ponto => {
+    const calc      = calcularContemplacao(ponto.mes);
+    const contems   = ponto.contemplados.map(id => partById(id)).filter(Boolean);
+    const nomes     = contems.length > 0 ? contems.map(p => primNome(p.nome)).join(' & ') : 'Não definido';
+
+    let badge = '';
+    if (contems.length === 0) {
+      badge = '<span class="badge badge-semPonto">Sem ponto</span>';
+    } else if (ponto.tipo === 'dividido') {
+      badge = '<span class="badge badge-dividido">✂️ Dividido</span>';
+    } else {
+      badge = '<span class="badge badge-contemplado">⭐ Individual</span>';
+    }
+
+    let calcHTML = '';
+    if (contems.length > 0) {
+      calcHTML = `
+        <div class="month-calc">
+          ${calc.totalPagantes} pagam × ${fmt(db.caixa.valor_parcela)} =
+          <strong>${fmt(calc.valorArrecadado)}</strong>
+          ${calc.qtdContemplados > 1
+            ? ` ÷ ${calc.qtdContemplados} = <strong>${fmt(calc.valorPorContemplado)} cada</strong>`
+            : ` → <strong>${primNome(contems[0].nome)}</strong> recebe tudo`}
+        </div>`;
+    }
+
+    return `
+      <div class="month-card">
+        <div class="month-card-head">
+          <span class="month-card-name">${ponto.nome_mes}</span>
+          ${badge}
+        </div>
+        <div class="flex-between">
+          <span style="font-weight:600;font-size:15px">${nomes}</span>
+          <button class="btn btn-ghost btn-sm" onclick="abrirModalPonto(${ponto.mes})">
+            ${contems.length > 0 ? 'Editar' : 'Definir'}
+          </button>
+        </div>
+        ${calcHTML}
+      </div>`;
+  }).join('');
+}
+
+function abrirModalPonto(mes) {
+  editPontoMes = mes;
+  const ponto  = db.pontos.find(p => p.mes === mes);
+  selPontoIds  = ponto ? [...ponto.contemplados] : [];
+
+  // Meses já ocupados por participante (exceto o mês atual)
+  const ocupados = {};
+  db.pontos.forEach(p => {
+    if (p.mes !== mes) p.contemplados.forEach(id => { ocupados[id] = p.nome_mes; });
+  });
+
+  const modal = document.getElementById('modal-ponto');
+  modal.style.display = 'flex';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-head">
+        <span class="modal-title">Ponto de ${MESES[mes-1]}</span>
+        <button class="modal-close" onclick="fecharModal('modal-ponto')">✕</button>
+      </div>
+      <p class="text-sm text-muted mb-8">
+        Selecione 1 ou 2 participantes.<br>
+        <strong>Dividido (2 pessoas):</strong> cada um recebe metade do arrecadado.
+      </p>
+      <div id="ponto-sel-list"></div>
+      <div class="month-calc mt-12 mb-8" id="ponto-calc-prev" style="min-height:40px"></div>
+      <button class="btn btn-primary btn-full" onclick="salvarPonto()">Confirmar ponto</button>
+      ${ponto && ponto.contemplados.length > 0
+        ? `<button class="btn btn-ghost btn-full mt-8" onclick="limparPonto(${mes})">Remover ponto deste mês</button>`
+        : ''}
+    </div>
+  `;
+
+  renderSelList(ocupados);
+  atualizarCalcPrev();
+}
+
+function renderSelList(ocupados) {
+  // Se não recebermos ocupados, recalculamos
+  if (!ocupados) {
+    ocupados = {};
+    db.pontos.forEach(p => {
+      if (p.mes !== editPontoMes) p.contemplados.forEach(id => { ocupados[id] = p.nome_mes; });
+    });
+  }
+
+  const ativos = db.participantes.filter(p => p.ativo !== false);
+  const listEl = document.getElementById('ponto-sel-list');
+  if (!listEl) return;
+
+  listEl.innerHTML = ativos.map(p => {
+    const isSel  = selPontoIds.includes(p.id);
+    const oMes   = ocupados[p.id];
+    const isOcup = !!oMes && !isSel;
+    let cls = 'sel-item';
+    if (isSel)  cls += ' selected';
+    if (isOcup) cls += ' occupied';
+
+    return `
+      <div class="${cls}" id="si-${p.id}" onclick="toggleSelPonto('${p.id}')">
+        <div class="avatar" style="width:38px;height:38px;font-size:13px;border-radius:12px">${iniciais(p.nome)}</div>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:14px">${p.nome}</div>
+          ${isOcup ? `<div class="text-xs text-muted">Ponto em ${oMes}</div>` : ''}
+        </div>
+        ${isSel ? '<span class="check-mark">✓</span>' : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleSelPonto(id) {
+  const idx = selPontoIds.indexOf(id);
+  if (idx >= 0) {
+    selPontoIds.splice(idx, 1);
+  } else {
+    if (selPontoIds.length >= 2) { showToast('Máximo 2 participantes por ponto'); return; }
+    selPontoIds.push(id);
+  }
+  renderSelList(null);
+  atualizarCalcPrev();
+}
+
+function atualizarCalcPrev() {
+  const el = document.getElementById('ponto-calc-prev');
+  if (!el || !db.caixa) return;
+  const totalPart   = db.participantes.filter(p => p.ativo !== false).length;
+  const qtd         = selPontoIds.length;
+  if (qtd === 0) { el.innerHTML = 'Selecione pelo menos 1 participante.'; return; }
+  const pagantes    = totalPart - qtd;
+  const arrecadado  = pagantes * db.caixa.valor_parcela;
+  const porContemp  = arrecadado / qtd;
+  el.innerHTML = `
+    <strong>${pagantes}</strong> pagantes × ${fmt(db.caixa.valor_parcela)} =
+    <strong>${fmt(arrecadado)}</strong>
+    ${qtd > 1 ? ` ÷ ${qtd} = <strong>${fmt(porContemp)} cada</strong>` : ''}
+  `;
+}
+
+function salvarPonto() {
+  if (selPontoIds.length === 0) { showToast('Selecione pelo menos 1 participante'); return; }
+  const ponto = db.pontos.find(p => p.mes === editPontoMes);
+  if (ponto) {
+    ponto.contemplados = [...selPontoIds];
+    ponto.tipo = selPontoIds.length > 1 ? 'dividido' : 'individual';
+  }
+  salvar();
+  fecharModal('modal-ponto');
+  renderPontos();
+  showToast('Ponto salvo!');
+}
+
+function limparPonto(mes) {
+  if (!confirm('Remover o ponto deste mês?')) return;
+  const ponto = db.pontos.find(p => p.mes === mes);
+  if (ponto) { ponto.contemplados = []; ponto.tipo = 'individual'; }
+  salvar();
+  fecharModal('modal-ponto');
+  renderPontos();
+  showToast('Ponto removido');
+}
+
+/* ──────────────────────────────────────────────
+   PAGAMENTOS
+────────────────────────────────────────────── */
+function renderPagamentos() {
+  if (!db.caixa) return;
+
+  const mes      = mesPagamentos;
+  const ponto    = db.pontos.find(p => p.mes === mes);
+  const contemsI = ponto ? ponto.contemplados : [];
+  const calc     = calcularContemplacao(mes);
+  const { pagadores, pagos } = estatisticasMes(mes);
+
+  document.getElementById('pag-mes-label').textContent = `${MESES[mes-1]} ${db.caixa.ano}`;
+
+  /* Sumbar */
+  const totalArrecadado = pagos.length * db.caixa.valor_parcela;
+  document.getElementById('pag-sumbar').innerHTML = `
+    <div>
+      <div class="sumbar-lbl">Pagamentos</div>
+      <div class="sumbar-val">${pagos.length} / ${pagadores.length}</div>
+    </div>
+    <div style="text-align:right">
+      <div class="sumbar-lbl">Arrecadado</div>
+      <div class="sumbar-val">${fmt(totalArrecadado)}</div>
+    </div>
+  `;
+
+  /* Info de contemplação */
+  if (contemsI.length > 0) {
+    const contems = contemsI.map(id => partById(id)).filter(Boolean);
+    const nomes   = contems.map(p => primNome(p.nome)).join(' e ');
+    const tipotxt = ponto.tipo === 'dividido' ? 'Ponto Dividido' : 'Ponto Individual';
+    const icon    = ponto.tipo === 'dividido' ? '✂️' : '⭐';
+    document.getElementById('pag-contemp-info').innerHTML = `
+      <div class="card" style="border-left:4px solid var(--primary);padding:14px 16px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:26px">${icon}</span>
+          <div>
+            <div style="font-weight:700;font-size:15px">${nomes} — ${tipotxt}</div>
+            <div class="text-sm text-muted">
+              Recebe ${fmt(calc.valorPorContemplado)}
+              ${calc.qtdContemplados > 1 ? ' cada' : ''}
+              (${calc.totalPagantes} pagam × ${fmt(db.caixa.valor_parcela)})
+            </div>
+          </div>
+        </div>
+      </div>`;
+  } else {
+    document.getElementById('pag-contemp-info').innerHTML = '';
+  }
+
+  /* Lista de participantes */
+  const ativos = db.participantes.filter(p => p.ativo !== false);
+  if (ativos.length === 0) {
+    document.getElementById('pag-list').innerHTML = `
+      <div class="empty"><div class="empty-icon">💳</div><p>Nenhum participante cadastrado.</p></div>`;
+    return;
+  }
+
+  // Ordena: pagadores primeiro, contemplados depois
+  const sorted = [...ativos].sort((a, b) => {
+    const ac = contemsI.includes(a.id) ? 1 : 0;
+    const bc = contemsI.includes(b.id) ? 1 : 0;
+    return ac - bc;
+  });
+
+  document.getElementById('pag-list').innerHTML = sorted.map(p => {
+    /* Contemplados: exibir badge, sem toggle */
+    if (contemsI.includes(p.id)) {
+      return `
+        <div class="pay-item">
+          <div class="avatar">${iniciais(p.nome)}</div>
+          <div class="pay-info">
+            <div class="p-name">${p.nome}</div>
+            <div class="p-sub">Isento neste mês</div>
+          </div>
+          <span class="badge badge-contemplado">Contemplado</span>
+        </div>`;
+    }
+
+    /* Pagadores normais: toggle */
+    const pag   = getPagamento(p.id, mes);
+    const isPago = pag && pag.status === 'pago';
+    return `
+      <div class="pay-item">
+        <div class="avatar">${iniciais(p.nome)}</div>
+        <div class="pay-info">
+          <div class="p-name">${p.nome}</div>
+          <div class="p-sub">${fmt(db.caixa.valor_parcela)}</div>
+        </div>
+        <label class="toggle" title="${isPago ? 'Marcar como pendente' : 'Marcar como pago'}">
+          <input type="checkbox" ${isPago ? 'checked' : ''} onchange="togglePagamento('${p.id}',${mes})">
+          <div class="tog-track"></div>
+          <div class="tog-thumb"></div>
+        </label>
+      </div>`;
+  }).join('');
+}
+
+function togglePagamento(partId, mes) {
+  const ex = getPagamento(partId, mes);
+  if (ex) {
+    ex.status = ex.status === 'pago' ? 'pendente' : 'pago';
+    ex.data_pagamento = ex.status === 'pago' ? hoje() : null;
+  } else {
+    db.pagamentos.push({
+      id: uid(),
+      participante_id: partId,
+      mes,
+      ano: db.caixa?.ano || new Date().getFullYear(),
+      status: 'pago',
+      data_pagamento: hoje()
+    });
+  }
+  salvar();
+  renderPagamentos();
+}
+
+function mudarMes(delta) {
+  mesPagamentos = ((mesPagamentos - 1 + delta + 12) % 12) + 1;
+  renderPagamentos();
+}
+
+function hoje() {
+  return new Date().toISOString().split('T')[0];
+}
+
+/* ──────────────────────────────────────────────
+   WHATSAPP
+────────────────────────────────────────────── */
+function renderWhatsapp() {
+  if (!db.caixa) return;
+
+  const mes       = mesPagamentos;
+  const contemsI  = (db.pontos.find(p => p.mes === mes) || {}).contemplados || [];
+  const ativos    = db.participantes.filter(p => p.ativo !== false);
+  const template  = db.caixa.mensagem_template || MSG_PADRAO;
+
+  /* Template textarea */
+  const ta = document.getElementById('wa-template');
+  if (!ta.value) ta.value = template;
+
+  /* Inadimplentes do mês (não pagaram e não são contemplados) */
+  const inadimplentes = ativos.filter(p => {
+    if (contemsI.includes(p.id)) return false;
+    const pag = getPagamento(p.id, mes);
+    return !pag || pag.status !== 'pago';
+  });
+
+  /* Bulk section */
+  if (inadimplentes.length > 0) {
+    document.getElementById('wa-bulk').innerHTML = `
+      <p class="text-sm text-muted mb-8">
+        ${inadimplentes.length} participante${inadimplentes.length !== 1 ? 's' : ''} em aberto em <strong>${MESES[mes-1]}</strong>
+      </p>
+      <button class="btn btn-success btn-full" onclick="iniciarBulk()">
+        💬 Enviar para todos em aberto
+      </button>`;
+  } else {
+    document.getElementById('wa-bulk').innerHTML = `
+      <p class="text-sm c-success fw-700">✓ Todos pagaram em ${MESES[mes-1]}!</p>`;
+  }
+
+  /* Lista individual: todos os ativos com telefone que não são contemplados */
+  const comTel = ativos.filter(p => p.telefone && !contemsI.includes(p.id));
+  if (comTel.length === 0) {
+    document.getElementById('wa-individual').innerHTML =
+      `<p class="text-sm text-muted">Nenhum participante com telefone cadastrado.</p>`;
+    return;
+  }
+
+  document.getElementById('wa-individual').innerHTML = comTel.map(p => {
+    const pag    = getPagamento(p.id, mes);
+    const isPago = pag && pag.status === 'pago';
+    return `
+      <div class="p-card mb-8">
+        <div class="avatar">${iniciais(p.nome)}</div>
+        <div class="p-info">
+          <div class="p-name">${p.nome}</div>
+          <span class="badge ${isPago ? 'badge-pago' : 'badge-pendente'}">${isPago ? '✓ Pago' : '● Em aberto'}</span>
+        </div>
+        <button class="btn btn-wa btn-sm" onclick="enviarWA('${p.id}',${mes})">
+          📱 Enviar
+        </button>
+      </div>`;
+  }).join('');
+}
+
+function salvarTemplate() {
+  if (!db.caixa) return;
+  db.caixa.mensagem_template = document.getElementById('wa-template').value;
+  salvar();
+  showToast('Modelo salvo!');
+}
+
+function buildMensagem(part, mes) {
+  const tpl  = document.getElementById('wa-template').value || MSG_PADRAO;
+  return tpl
+    .replace(/\[NOME\]/g,      primNome(part.nome))
+    .replace(/\[MÊS\]/g,       MESES[mes-1])
+    .replace(/\[CHAVE_PIX\]/g, db.caixa?.chave_pix || '')
+    .replace(/\[NOME_DONO\]/g, db.caixa?.nome_dono || '');
+}
+
+function enviarWA(partId, mes) {
+  const p = partById(partId);
+  if (!p || !p.telefone) { showToast('Participante sem telefone cadastrado'); return; }
+  const msg = buildMensagem(p, mes);
+  const num = '55' + p.telefone.replace(/\D/g, '');
+  window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+function iniciarBulk() {
+  const mes      = mesPagamentos;
+  const contemsI = (db.pontos.find(p => p.mes === mes) || {}).contemplados || [];
+  bulkFila = db.participantes.filter(p => {
+    if (!p.telefone || p.ativo === false) return false;
+    if (contemsI.includes(p.id)) return false;
+    const pag = getPagamento(p.id, mes);
+    return !pag || pag.status !== 'pago';
+  });
+  if (bulkFila.length === 0) { showToast('Nenhum inadimplente com telefone'); return; }
+  bulkIdx = 0;
+  renderBulkStep();
+}
+
+function renderBulkStep() {
+  if (bulkIdx >= bulkFila.length) {
+    document.getElementById('wa-bulk').innerHTML =
+      `<p class="text-sm c-success fw-700">✓ Todos os lembretes foram abertos!</p>
+       <button class="btn btn-ghost btn-sm mt-8" onclick="renderWhatsapp()">Voltar</button>`;
+    return;
+  }
+  const p = bulkFila[bulkIdx];
+  document.getElementById('wa-bulk').innerHTML = `
+    <div class="bulk-box">
+      <div class="bulk-prog">${bulkIdx + 1} de ${bulkFila.length}</div>
+      <div class="bulk-name">${p.nome}</div>
+      <div class="bulk-tel">${p.telefone}</div>
+      <button class="btn btn-wa btn-full" onclick="enviarBulkStep()">
+        💬 Abrir WhatsApp para ${primNome(p.nome)}
+      </button>
+      <button class="btn btn-ghost btn-full mt-8" onclick="renderWhatsapp()">Cancelar</button>
+    </div>`;
+}
+
+function enviarBulkStep() {
+  enviarWA(bulkFila[bulkIdx].id, mesPagamentos);
+  bulkIdx++;
+  renderBulkStep();
+}
+
+/* ──────────────────────────────────────────────
+   CONFIGURAÇÕES
+────────────────────────────────────────────── */
+function renderConfiguracoes() {
+  if (!db.caixa) return;
+  document.getElementById('cfg-nome').value   = db.caixa.nome            || '';
+  document.getElementById('cfg-ano').value    = db.caixa.ano             || '';
+  document.getElementById('cfg-parcela').value= db.caixa.valor_parcela   || '';
+  document.getElementById('cfg-pix').value    = db.caixa.chave_pix       || '';
+  document.getElementById('cfg-dono').value   = db.caixa.nome_dono       || '';
+}
+
+function salvarConfiguracoes() {
+  const nome  = document.getElementById('cfg-nome').value.trim();
+  const ano   = parseInt(document.getElementById('cfg-ano').value);
+  const parc  = parseFloat(document.getElementById('cfg-parcela').value);
+  const pix   = document.getElementById('cfg-pix').value.trim();
+  const dono  = document.getElementById('cfg-dono').value.trim();
+
+  if (!nome || !parc || !dono) { showToast('Preencha os campos obrigatórios'); return; }
+
+  db.caixa = { ...db.caixa, nome, ano, valor_total: parc * 12, valor_parcela: parc, chave_pix: pix, nome_dono: dono };
+  salvar();
+  showToast('Configurações salvas!');
+  setTimeout(() => showScreen('dashboard'), 700);
+}
+
+function resetarApp() {
+  if (!confirm('⚠️ Isso vai apagar TODOS os dados. Esta ação é irreversível.\n\nDeseja continuar?')) return;
+  if (!confirm('Tem CERTEZA? Participantes, pontos e pagamentos serão removidos.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
+}
+
+/* ──────────────────────────────────────────────
+   MODAIS
+────────────────────────────────────────────── */
+function fecharModal(id) {
+  const m = document.getElementById(id);
+  if (m) { m.style.display = 'none'; m.innerHTML = ''; m.className = ''; }
+}
+
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal-overlay')) fecharModal(e.target.id);
+});
+
+/* ──────────────────────────────────────────────
+   INICIALIZAÇÃO
+────────────────────────────────────────────── */
+carregar();
+
+if (!db.caixa) {
+  const ano = new Date().getFullYear();
+  document.getElementById('s-ano').value  = ano;
+  document.getElementById('s-nome').value = `Caixa ${ano}`;
+  showScreen('setup');
+} else {
+  mesPagamentos = new Date().getMonth() + 1;
+  showScreen('dashboard');
+}
+
+/* Service Worker (caminhos relativos — GitHub Pages) */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
