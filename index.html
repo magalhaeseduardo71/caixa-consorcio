@@ -860,10 +860,17 @@ function carregar() {
         return ex || { mes: i+1, nome_mes: n, contemplados: [], externos: [], tipo: 'individual' };
       });
     }
-    // Migração: garantir campo externos em pontos antigos
-    db.pontos.forEach(p => { if (!Array.isArray(p.externos)) p.externos = []; });
+    // Migração: garantir campos externos e contemplados em pontos antigos
+    db.pontos.forEach(p => {
+      if (!Array.isArray(p.externos))     p.externos     = [];
+      if (!Array.isArray(p.contemplados)) p.contemplados = [];
+    });
     if (!Array.isArray(db.participantes)) db.participantes = [];
     if (!Array.isArray(db.pagamentos))    db.pagamentos    = [];
+    // Migração: remover registros de pagamento no formato antigo (sem ponto_mes)
+    // para evitar inconsistências com o novo modelo slot-based
+    const temAntigos = db.pagamentos.some(p => p.ponto_mes === undefined);
+    if (temAntigos) db.pagamentos = [];
   } catch(e) { console.error('Erro ao carregar dados', e); }
 }
 
@@ -876,42 +883,71 @@ function uid() {
 }
 
 /* ──────────────────────────────────────────────
-   LÓGICA DE NEGÓCIO — CÁLCULO DE CONTEMPLAÇÃO
+   MODELO SLOT-BASED — LÓGICA CENTRAL
 
-   Regra crítica sobre EXTERNOS (não participantes):
-   - Externos NÃO pagam mensalidade → NÃO reduzem totalPagantes
-   - Mas RECEBEM uma fatia do valor arrecadado
+   O caixa tem N SLOTS (um por mês, N = total_meses = 12).
+   Cada slot vale R$300/mês e pode ter 1 ou 2 holders:
+   • Individual (1 holder):  holder paga R$300/mês
+   • Dividido   (2 holders): cada holder paga R$150/mês (= R$300 no total)
 
-   Exemplo: 7 participantes, parcela R$300, Eduardo + Lucas (externo):
-     totalPagantes  = 7 - 1 (só Eduardo é isento)  = 6
-     valorArrecadado = 6 × 300 = R$1.800
-     totalRecipients = 1 (Eduardo) + 1 (Lucas externo) = 2
-     valorPorContemplado = 1.800 ÷ 2 = R$900 cada
+   Na contemplação do slot S no mês M:
+     → Esse slot NÃO paga
+     → Outros (N-1) slots × R$300 = valor arrecadado
+     → Cada holder do slot S recebe: valor_arrecadado ÷ qtd_holders
 
-   Fórmula:
-     totalPagantes       = totalParticipantes - len(contemplados_registrados)
-     valorArrecadado     = totalPagantes × parcela
-     totalRecipients     = len(contemplados_registrados) + len(externos)
-     valorPorContemplado = valorArrecadado ÷ totalRecipients
+   Exemplo (N=12, parcela R$300):
+     Individual:  11 × 300 = 3.300 → holder recebe R$3.300
+     Dividido 2:  11 × 300 = 3.300 ÷ 2 = R$1.650 cada
 ────────────────────────────────────────────── */
+
+/* Retorna array de holders de um ponto: { tipo, key, nome } */
+function getPontoHolders(ponto) {
+  if (!ponto) return [];
+  const holders = [];
+  for (const id of (ponto.contemplados || [])) {
+    const p = partById(id);
+    holders.push({
+      tipo: 'registrado',
+      key:  'p:' + id,
+      id,
+      nome: p ? p.nome : '?',
+      telefone: p ? (p.telefone || '') : ''
+    });
+  }
+  for (const nome of (ponto.externos || [])) {
+    holders.push({
+      tipo: 'externo',
+      key:  'e:' + ponto.mes + ':' + nome,
+      nome,
+      telefone: ''
+    });
+  }
+  return holders;
+}
+
+/* Quanto cada holder paga por mês: R$300 (individual) ou R$150 (dividido) */
+function getSharePerHolder(ponto) {
+  const h = getPontoHolders(ponto);
+  return h.length > 0 ? (db.caixa ? db.caixa.valor_parcela / h.length : 0) : 0;
+}
+
+/* Calcula a contemplação de um mês usando fórmula slot-based */
 function calcularContemplacao(mes) {
   const ponto      = db.pontos.find(p => p.mes === mes);
-  const ativos     = db.participantes.filter(p => p.ativo !== false);
-  const totalPart  = ativos.length;
   const parcela    = db.caixa ? db.caixa.valor_parcela : 0;
+  const totalSlots = db.caixa ? db.caixa.total_meses   : 12;
 
-  const contemsIds = (ponto && ponto.contemplados) ? ponto.contemplados : [];
-  const externos   = (ponto && ponto.externos)     ? ponto.externos     : [];
-
-  // Só os contemplados REGISTRADOS reduzem a contagem de pagantes
-  const qtdRegis        = contemsIds.length;
-  const totalRecipients = qtdRegis + externos.length;
+  const holders        = getPontoHolders(ponto);
+  const totalRecipients = holders.length;
+  const contemsIds     = (ponto && ponto.contemplados) || [];
+  const externos       = (ponto && ponto.externos)     || [];
 
   if (totalRecipients === 0) {
     return {
-      totalPagantes: totalPart,
-      valorArrecadado: totalPart * parcela,
+      totalPagantes: totalSlots,
+      valorArrecadado: totalSlots * parcela,
       valorPorContemplado: 0,
+      sharePerHolder: parcela,
       qtdContemplados: 0,
       totalRecipients: 0,
       contemplados: [],
@@ -920,40 +956,70 @@ function calcularContemplacao(mes) {
     };
   }
 
-  const totalPagantes       = totalPart - qtdRegis;
+  // 1 slot fica de fora → (N-1) slots pagam R$300 cada
+  const totalPagantes       = totalSlots - 1;
   const valorArrecadado     = totalPagantes * parcela;
-  const valorPorContemplado = totalRecipients > 0 ? valorArrecadado / totalRecipients : 0;
-  const tipoCalc            = totalRecipients > 1 ? 'dividido' : 'individual';
+  const valorPorContemplado = valorArrecadado / totalRecipients;
+  const sharePerHolder      = parcela / totalRecipients; // o que cada holder PAGA por mês
 
   return {
     totalPagantes,
     valorArrecadado,
     valorPorContemplado,
-    qtdContemplados: qtdRegis,
+    sharePerHolder,
+    qtdContemplados: contemsIds.length,
     totalRecipients,
     contemplados: contemsIds,
     externos,
-    tipo: tipoCalc
+    tipo: totalRecipients > 1 ? 'dividido' : 'individual'
   };
 }
 
-function isContemplado(partId, mes) {
-  const p = db.pontos.find(p => p.mes === mes);
-  return p ? p.contemplados.includes(partId) : false;
+/* ── Pagamentos por slot-holder ── */
+
+/* Busca pagamento de um holder específico de um slot específico em um mês */
+function getPagamentoSlot(ponto_mes, holder_key, mes) {
+  return db.pagamentos.find(p =>
+    p.ponto_mes   === ponto_mes &&
+    p.holder_key  === holder_key &&
+    p.mes         === mes
+  ) || null;
 }
 
-function getPagamento(partId, mes) {
-  return db.pagamentos.find(p => p.participante_id === partId && p.mes === mes) || null;
+/* Alterna status de pagamento de um holder */
+function togglePagamentoSlot(ponto_mes, holder_key, mes) {
+  const ex = getPagamentoSlot(ponto_mes, holder_key, mes);
+  if (ex) {
+    ex.status = ex.status === 'pago' ? 'pendente' : 'pago';
+    ex.data   = ex.status === 'pago' ? hoje() : null;
+  } else {
+    db.pagamentos.push({
+      id:          uid(),
+      ponto_mes,
+      holder_key,
+      mes,
+      ano:         db.caixa?.ano || new Date().getFullYear(),
+      status:      'pago',
+      data:        hoje()
+    });
+  }
+  salvar();
+  renderPagamentos();
 }
 
+/* Estatísticas de um mês: quantos pagadores existem e quantos já pagaram */
 function estatisticasMes(mes) {
-  const contemsIds = (db.pontos.find(p => p.mes === mes) || {}).contemplados || [];
-  const pagadores  = db.participantes.filter(p => p.ativo !== false && !contemsIds.includes(p.id));
-  const pagos      = pagadores.filter(p => {
-    const pag = getPagamento(p.id, mes);
-    return pag && pag.status === 'pago';
+  let totalEntradas = 0, totalPagas = 0;
+  db.pontos.forEach(ponto => {
+    if (ponto.mes === mes) return; // slot contemplado, pula
+    const holders = getPontoHolders(ponto);
+    holders.forEach(h => {
+      totalEntradas++;
+      const pag = getPagamentoSlot(ponto.mes, h.key, mes);
+      if (pag && pag.status === 'pago') totalPagas++;
+    });
   });
-  return { pagadores, pagos };
+  return { totalEntradas, totalPagas };
 }
 
 /* ──────────────────────────────────────────────
@@ -1050,8 +1116,8 @@ function renderDashboard() {
   const mesAtual = new Date().getMonth() + 1;
   const calc     = calcularContemplacao(mesAtual);
   const ponto    = db.pontos.find(p => p.mes === mesAtual);
-  const { pagadores, pagos } = estatisticasMes(mesAtual);
-  const pct      = pagadores.length > 0 ? Math.round(pagos.length / pagadores.length * 100) : 0;
+  const { totalEntradas, totalPagas } = estatisticasMes(mesAtual);
+  const pct = totalEntradas > 0 ? Math.round(totalPagas / totalEntradas * 100) : 0;
 
   document.getElementById('dash-title').textContent = db.caixa.nome;
 
@@ -1085,7 +1151,7 @@ function renderDashboard() {
   heroHTML += `
     <div class="progress-wrap">
       <div class="progress-meta">
-        <span>${pagos.length} de ${pagadores.length} pagaram</span>
+        <span>${totalPagas} de ${totalEntradas} pagaram</span>
         <span>${pct}%</span>
       </div>
       <div class="progress-track">
@@ -1096,8 +1162,20 @@ function renderDashboard() {
 
   document.getElementById('dash-hero').innerHTML = `<div class="hero">${heroHTML}</div>`;
 
-  /* Stats */
-  const totalArrecMes = pagos.length * db.caixa.valor_parcela;
+  /* Stats — arrecadado real (soma dos shares pagos) */
+  const totalArrecMes = (() => {
+    let total = 0;
+    db.pontos.forEach(ponto => {
+      if (ponto.mes === mesAtual) return;
+      const share   = getSharePerHolder(ponto);
+      const holders = getPontoHolders(ponto);
+      holders.forEach(h => {
+        const pag = getPagamentoSlot(ponto.mes, h.key, mesAtual);
+        if (pag && pag.status === 'pago') total += share;
+      });
+    });
+    return total;
+  })();
   document.getElementById('dash-stats').innerHTML = `
     <div class="stat-card">
       <div class="stat-lbl">Arrecadado no mês</div>
@@ -1105,7 +1183,7 @@ function renderDashboard() {
     </div>
     <div class="stat-card">
       <div class="stat-lbl">Aguardando</div>
-      <div class="stat-val c-warning">${pagadores.length - pagos.length}</div>
+      <div class="stat-val c-warning">${totalEntradas - totalPagas}</div>
     </div>
   `;
 
@@ -1113,8 +1191,8 @@ function renderDashboard() {
   const gridHTML = MESES.map((nm, i) => {
     const m = i + 1;
     const c = calcularContemplacao(m);
-    const { pagadores: pg, pagos: pgs } = estatisticasMes(m);
-    const todoPago = pg.length > 0 && pgs.length === pg.length;
+    const { totalEntradas: te, totalPagas: tp } = estatisticasMes(m);
+    const todoPago = te > 0 && tp === te;
     const isCurrent = m === mesAtual;
 
     let chipClass = 'yr-chip';
@@ -1448,16 +1526,17 @@ function removerExterno(nome) {
 function atualizarCalcPrev() {
   const el = document.getElementById('ponto-calc-prev');
   if (!el || !db.caixa) return;
-  const totalPart     = db.participantes.filter(p => p.ativo !== false).length;
-  const qtdRegis      = selPontoIds.length;
-  const totalRecip    = qtdRegis + selExternos.length;
+  const totalSlots = db.caixa.total_meses;
+  const parcela    = db.caixa.valor_parcela;
+  const totalRecip = selPontoIds.length + selExternos.length;
 
   if (totalRecip === 0) { el.innerHTML = 'Selecione pelo menos 1 participante ou externo.'; return; }
 
-  // Só os registrados reduzem os pagantes
-  const pagantes   = totalPart - qtdRegis;
-  const arrecadado = pagantes * db.caixa.valor_parcela;
+  // Slot-based: 1 slot fica isento → (N-1) slots pagam R$300 cada
+  const pagantes   = totalSlots - 1;
+  const arrecadado = pagantes * parcela;
   const porRecip   = arrecadado / totalRecip;
+  const shareHolder = parcela / totalRecip; // o que cada holder paga por mês
 
   const todosNomes = [
     ...selPontoIds.map(id => primNome(partById(id)?.nome || '?')),
@@ -1465,10 +1544,10 @@ function atualizarCalcPrev() {
   ];
 
   el.innerHTML = `
-    <strong>${pagantes}</strong> pagam × ${fmt(db.caixa.valor_parcela)} = <strong>${fmt(arrecadado)}</strong>
+    <strong>${pagantes}</strong> slots × ${fmt(parcela)} = <strong>${fmt(arrecadado)}</strong>
     ${totalRecip > 1
       ? ` ÷ ${totalRecip} = <strong>${fmt(porRecip)} cada</strong>
-          <br><span style="font-size:11px;color:var(--muted)">${todosNomes.join(' + ')}</span>`
+          <br><span style="font-size:11px;color:var(--muted)">${todosNomes.join(' + ')} — cada um paga ${fmt(shareHolder)}/mês</span>`
       : ` → <strong>${todosNomes[0]}</strong>`}
   `;
 }
@@ -1502,43 +1581,54 @@ function limparPonto(mes) {
 }
 
 /* ──────────────────────────────────────────────
-   PAGAMENTOS
+   PAGAMENTOS — modelo slot-based
+   Cada slot (ponto) tem 1 ou 2 holders.
+   Cada holder tem um toggle de pagamento por mês.
+   O slot contemplado no mês não aparece → seus holders estão isentos.
 ────────────────────────────────────────────── */
 function renderPagamentos() {
   if (!db.caixa) return;
 
-  const mes      = mesPagamentos;
-  const ponto    = db.pontos.find(p => p.mes === mes);
-  const contemsI = ponto ? ponto.contemplados : [];
-  const calc     = calcularContemplacao(mes);
-  const { pagadores, pagos } = estatisticasMes(mes);
+  const mes  = mesPagamentos;
+  const calc = calcularContemplacao(mes);
+  const { totalEntradas, totalPagas } = estatisticasMes(mes);
 
   document.getElementById('pag-mes-label').textContent = `${MESES[mes-1]} ${db.caixa.ano}`;
 
-  /* Sumbar */
-  const totalArrecadado = pagos.length * db.caixa.valor_parcela;
+  /* ── Sumbar ── */
+  const valorPagoReal = (() => {
+    let total = 0;
+    db.pontos.forEach(ponto => {
+      if (ponto.mes === mes) return;
+      const share   = getSharePerHolder(ponto);
+      const holders = getPontoHolders(ponto);
+      holders.forEach(h => {
+        const pag = getPagamentoSlot(ponto.mes, h.key, mes);
+        if (pag && pag.status === 'pago') total += share;
+      });
+    });
+    return total;
+  })();
+
   document.getElementById('pag-sumbar').innerHTML = `
     <div>
-      <div class="sumbar-lbl">Pagamentos</div>
-      <div class="sumbar-val">${pagos.length} / ${pagadores.length}</div>
+      <div class="sumbar-lbl">Entradas pagas</div>
+      <div class="sumbar-val">${totalPagas} / ${totalEntradas}</div>
     </div>
     <div style="text-align:right">
       <div class="sumbar-lbl">Arrecadado</div>
-      <div class="sumbar-val">${fmt(totalArrecadado)}</div>
+      <div class="sumbar-val">${fmt(valorPagoReal)}</div>
     </div>
   `;
 
-  /* Info de contemplação */
-  const externos   = (ponto && ponto.externos) || [];
-  const temAlguem  = contemsI.length > 0 || externos.length > 0;
-
-  if (temAlguem) {
-    const contems    = contemsI.map(id => partById(id)).filter(Boolean);
-    const todosNomes = [...contems.map(p => primNome(p.nome)), ...externos];
-    const tipotxt    = calc.tipo === 'dividido' ? 'Ponto Dividido' : 'Ponto Individual';
-    const icon       = calc.tipo === 'dividido' ? '✂️' : '⭐';
-    const labelExt   = externos.length > 0
-      ? `<br><span style="font-size:11px">${externos.join(', ')} ${externos.length === 1 ? 'é externo' : 'são externos'} (não paga mensalidade)</span>`
+  /* ── Card de contemplação ── */
+  if (calc.totalRecipients > 0) {
+    const holders = getPontoHolders(db.pontos.find(p => p.mes === mes));
+    const todosNomes = holders.map(h => primNome(h.nome));
+    const icon    = calc.tipo === 'dividido' ? '✂️' : '⭐';
+    const tipotxt = calc.tipo === 'dividido' ? 'Ponto Dividido' : 'Ponto Individual';
+    const extLabel = calc.externos.length > 0
+      ? `<br><span style="font-size:11px">${calc.externos.join(', ')} paga${calc.externos.length > 1 ? 'm' : ''} metade do slot (R$${calc.sharePerHolder} cada), mas não paga mensalidade individual</span>`
       : '';
     document.getElementById('pag-contemp-info').innerHTML = `
       <div class="card" style="border-left:4px solid var(--primary);padding:14px 16px;margin-bottom:12px">
@@ -1547,9 +1637,9 @@ function renderPagamentos() {
           <div>
             <div style="font-weight:700;font-size:15px">${todosNomes.join(' & ')} — ${tipotxt}</div>
             <div class="text-sm text-muted">
-              ${fmt(calc.valorPorContemplado)} cada
-              (${calc.totalPagantes} pagam × ${fmt(db.caixa.valor_parcela)} ÷ ${calc.totalRecipients})
-              ${labelExt}
+              ${calc.totalPagantes} slots × ${fmt(db.caixa.valor_parcela)} = ${fmt(calc.valorArrecadado)}
+              ${calc.totalRecipients > 1 ? ` ÷ ${calc.totalRecipients} = <strong style="color:var(--text)">${fmt(calc.valorPorContemplado)} cada</strong>` : ''}
+              ${extLabel}
             </div>
           </div>
         </div>
@@ -1558,71 +1648,65 @@ function renderPagamentos() {
     document.getElementById('pag-contemp-info').innerHTML = '';
   }
 
-  /* Lista de participantes */
-  const ativos = db.participantes.filter(p => p.ativo !== false);
-  if (ativos.length === 0) {
+  /* ── Verificar se há pontos configurados ── */
+  const pontosComHolder = db.pontos.filter(p => getPontoHolders(p).length > 0);
+  if (pontosComHolder.length === 0) {
     document.getElementById('pag-list').innerHTML = `
-      <div class="empty"><div class="empty-icon">💳</div><p>Nenhum participante cadastrado.</p></div>`;
+      <div class="empty"><div class="empty-icon">💳</div>
+        <p>Configure os pontos antes de registrar pagamentos.</p>
+        <button class="btn btn-primary mt-16" onclick="showScreen('pontos')" style="display:inline-flex">Ir para Pontos</button>
+      </div>`;
     return;
   }
 
-  // Ordena: pagadores primeiro, contemplados depois
-  const sorted = [...ativos].sort((a, b) => {
-    const ac = contemsI.includes(a.id) ? 1 : 0;
-    const bc = contemsI.includes(b.id) ? 1 : 0;
-    return ac - bc;
-  });
+  /* ── Lista de slots (exceto o contemplado) ── */
+  // Ordena os pontos por mês
+  const pontosOrdenados = [...db.pontos].sort((a, b) => a.mes - b.mes);
 
-  document.getElementById('pag-list').innerHTML = sorted.map(p => {
-    /* Contemplados: exibir badge, sem toggle */
-    if (contemsI.includes(p.id)) {
-      return `
-        <div class="pay-item">
-          <div class="avatar">${iniciais(p.nome)}</div>
-          <div class="pay-info">
-            <div class="p-name">${p.nome}</div>
-            <div class="p-sub">Isento neste mês</div>
-          </div>
-          <span class="badge badge-contemplado">Contemplado</span>
+  let html = '';
+  pontosOrdenados.forEach(ponto => {
+    if (ponto.mes === mes) return; // contemplado, pula
+
+    const holders = getPontoHolders(ponto);
+    if (holders.length === 0) return; // slot sem holder, pula
+
+    const share      = getSharePerHolder(ponto);
+    const isDividido = holders.length > 1;
+
+    if (isDividido) {
+      // Cabeçalho do slot dividido
+      const nomesSlot = holders.map(h => primNome(h.nome)).join(' + ');
+      html += `
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 6px;padding:0 2px">
+          ✂️ Slot ${MESES[ponto.mes-1]} — ${nomesSlot}
         </div>`;
     }
 
-    /* Pagadores normais: toggle */
-    const pag   = getPagamento(p.id, mes);
-    const isPago = pag && pag.status === 'pago';
-    return `
-      <div class="pay-item">
-        <div class="avatar">${iniciais(p.nome)}</div>
-        <div class="pay-info">
-          <div class="p-name">${p.nome}</div>
-          <div class="p-sub">${fmt(db.caixa.valor_parcela)}</div>
-        </div>
-        <label class="toggle" title="${isPago ? 'Marcar como pendente' : 'Marcar como pago'}">
-          <input type="checkbox" ${isPago ? 'checked' : ''} onchange="togglePagamento('${p.id}',${mes})">
-          <div class="tog-track"></div>
-          <div class="tog-thumb"></div>
-        </label>
-      </div>`;
-  }).join('');
-}
-
-function togglePagamento(partId, mes) {
-  const ex = getPagamento(partId, mes);
-  if (ex) {
-    ex.status = ex.status === 'pago' ? 'pendente' : 'pago';
-    ex.data_pagamento = ex.status === 'pago' ? hoje() : null;
-  } else {
-    db.pagamentos.push({
-      id: uid(),
-      participante_id: partId,
-      mes,
-      ano: db.caixa?.ano || new Date().getFullYear(),
-      status: 'pago',
-      data_pagamento: hoje()
+    holders.forEach(h => {
+      const pag    = getPagamentoSlot(ponto.mes, h.key, mes);
+      const isPago = pag && pag.status === 'pago';
+      const av     = h.tipo === 'registrado' ? iniciais(h.nome) : h.nome[0].toUpperCase();
+      // data-attrs para o toggle (escapa aspas)
+      const safeKey = h.key.replace(/'/g, '&#39;');
+      html += `
+        <div class="pay-item">
+          <div class="avatar" style="${isDividido ? 'border-radius:10px;font-size:13px' : ''}">${av}</div>
+          <div class="pay-info">
+            <div class="p-name">${h.nome}</div>
+            <div class="p-sub">${fmt(share)}${isDividido ? ' <span style="color:var(--muted);font-size:11px">½ slot</span>' : ''}</div>
+          </div>
+          <label class="toggle" title="${isPago ? 'Marcar como pendente' : 'Marcar como pago'}">
+            <input type="checkbox" ${isPago ? 'checked' : ''}
+              onchange="togglePagamentoSlot(${ponto.mes},'${safeKey}',${mes})">
+            <div class="tog-track"></div>
+            <div class="tog-thumb"></div>
+          </label>
+        </div>`;
     });
-  }
-  salvar();
-  renderPagamentos();
+  });
+
+  document.getElementById('pag-list').innerHTML = html || `
+    <div class="empty"><div class="empty-icon">✓</div><p>Todos os slots são contemplados neste mês!</p></div>`;
 }
 
 function mudarMes(delta) {
@@ -1640,20 +1724,51 @@ function hoje() {
 function renderWhatsapp() {
   if (!db.caixa) return;
 
-  const mes       = mesPagamentos;
-  const contemsI  = (db.pontos.find(p => p.mes === mes) || {}).contemplados || [];
-  const ativos    = db.participantes.filter(p => p.ativo !== false);
-  const template  = db.caixa.mensagem_template || MSG_PADRAO;
-
-  /* Template textarea */
-  const ta = document.getElementById('wa-template');
+  const mes      = mesPagamentos;
+  const template = db.caixa.mensagem_template || MSG_PADRAO;
+  const ta       = document.getElementById('wa-template');
   if (!ta.value) ta.value = template;
 
-  /* Inadimplentes do mês (não pagaram e não são contemplados) */
+  /* Verifica se um participante registrado tem algum slot pendente no mês */
+  function partTemPendente(partId) {
+    for (const ponto of db.pontos) {
+      if (ponto.mes === mes) continue; // slot contemplado, isento
+      const holders = getPontoHolders(ponto);
+      for (const h of holders) {
+        if (h.tipo === 'registrado' && h.id === partId) {
+          const pag = getPagamentoSlot(ponto.mes, h.key, mes);
+          if (!pag || pag.status !== 'pago') return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /* Verifica se um participante tem todos os slots pagos */
+  function partTodoPago(partId) {
+    let temAlgum = false;
+    for (const ponto of db.pontos) {
+      if (ponto.mes === mes) continue;
+      const holders = getPontoHolders(ponto);
+      for (const h of holders) {
+        if (h.tipo === 'registrado' && h.id === partId) {
+          temAlgum = true;
+          const pag = getPagamentoSlot(ponto.mes, h.key, mes);
+          if (!pag || pag.status !== 'pago') return false;
+        }
+      }
+    }
+    return temAlgum;
+  }
+
+  /* Participantes isentos no mês (contemplados) */
+  const contemsI = (db.pontos.find(p => p.mes === mes) || {}).contemplados || [];
+
+  /* Inadimplentes do mês: participante com algum slot não pago */
+  const ativos = db.participantes.filter(p => p.ativo !== false);
   const inadimplentes = ativos.filter(p => {
     if (contemsI.includes(p.id)) return false;
-    const pag = getPagamento(p.id, mes);
-    return !pag || pag.status !== 'pago';
+    return partTemPendente(p.id);
   });
 
   /* Bulk section */
@@ -1670,7 +1785,7 @@ function renderWhatsapp() {
       <p class="text-sm c-success fw-700">✓ Todos pagaram em ${MESES[mes-1]}!</p>`;
   }
 
-  /* Lista individual: todos os ativos com telefone que não são contemplados */
+  /* Lista individual */
   const comTel = ativos.filter(p => p.telefone && !contemsI.includes(p.id));
   if (comTel.length === 0) {
     document.getElementById('wa-individual').innerHTML =
@@ -1679,8 +1794,7 @@ function renderWhatsapp() {
   }
 
   document.getElementById('wa-individual').innerHTML = comTel.map(p => {
-    const pag    = getPagamento(p.id, mes);
-    const isPago = pag && pag.status === 'pago';
+    const isPago = partTodoPago(p.id);
     return `
       <div class="p-card mb-8">
         <div class="avatar">${iniciais(p.nome)}</div>
@@ -1725,8 +1839,18 @@ function iniciarBulk() {
   bulkFila = db.participantes.filter(p => {
     if (!p.telefone || p.ativo === false) return false;
     if (contemsI.includes(p.id)) return false;
-    const pag = getPagamento(p.id, mes);
-    return !pag || pag.status !== 'pago';
+    // tem algum slot pendente
+    for (const ponto of db.pontos) {
+      if (ponto.mes === mes) continue;
+      const holders = getPontoHolders(ponto);
+      for (const h of holders) {
+        if (h.tipo === 'registrado' && h.id === p.id) {
+          const pag = getPagamentoSlot(ponto.mes, h.key, mes);
+          if (!pag || pag.status !== 'pago') return true;
+        }
+      }
+    }
+    return false;
   });
   if (bulkFila.length === 0) { showToast('Nenhum inadimplente com telefone'); return; }
   bulkIdx = 0;
